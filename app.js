@@ -18,6 +18,8 @@ const AREA_PRIORITY = {
   "宇美町": 50
 };
 
+const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=900&q=75";
+
 const state = {
   properties: [],
   news: []
@@ -73,7 +75,6 @@ function isTypeMatch(item, typeFilter) {
   if (typeFilter === "public") return item.tags.includes("公的") || item.tags.includes("行政") || item.type === "ur";
   if (typeFilter === "ur") return item.type === "ur";
   if (typeFilter === "safety") return item.type === "safety";
-  if (typeFilter === "senior") return item.type === "senior";
   if (typeFilter === "private") return item.type === "private";
   return true;
 }
@@ -126,7 +127,7 @@ function filterProperties() {
 
 function badgeClass(tag) {
   if (["公的", "行政", "UR"].includes(tag)) return "green";
-  if (["家賃要確認", "条件要確認"].includes(tag)) return "orange";
+  if (["家賃要確認", "条件要確認", "代表画像"].includes(tag)) return "orange";
   if (["初期費用高め"].includes(tag)) return "red";
   return "";
 }
@@ -144,31 +145,43 @@ function render() {
     return;
   }
 
-  cards.innerHTML = items.map((item, index) => `
-    <article class="property-card ${index === 0 ? "top-pick" : ""}">
-      <div class="card-head">
-        <div>
-          <h3>${escapeHtml(item.title)}</h3>
-          <p class="muted">${escapeHtml(item.subtitle)}</p>
+  cards.innerHTML = items.map((item, index) => {
+    const imageUrl = item.imageUrl || FALLBACK_IMAGE;
+    const imageLabel = item.imageLabel || "代表画像";
+
+    return `
+      <article class="property-card ${index === 0 ? "top-pick" : ""}">
+        <a class="property-image" href="${escapeAttr(item.url)}" target="_blank" rel="noopener" aria-label="${escapeAttr(item.title)}を開く">
+          <img src="${escapeAttr(imageUrl)}" alt="${escapeAttr(item.title)}の画像" loading="lazy" onerror="this.src='${FALLBACK_IMAGE}'" />
+          <span>${escapeHtml(imageLabel)}</span>
+        </a>
+
+        <div class="property-body">
+          <div class="card-head">
+            <div>
+              <h3>${escapeHtml(item.title)}</h3>
+              <p class="muted">${escapeHtml(item.subtitle)}</p>
+            </div>
+            <div class="score">${item.score}</div>
+          </div>
+          <div class="badges">
+            ${item.tags.map((tag) => `<span class="badge ${badgeClass(tag)}">${escapeHtml(tag)}</span>`).join("")}
+          </div>
+          <div class="specs">
+            <div class="spec"><span>エリア</span><strong>${escapeHtml(item.area)}</strong></div>
+            <div class="spec"><span>間取り目安</span><strong>${escapeHtml(item.layoutLabel)}</strong></div>
+            <div class="spec"><span>家賃目安</span><strong>${escapeHtml(item.rentLabel)}</strong></div>
+            <div class="spec"><span>駅徒歩目安</span><strong>${escapeHtml(item.walkLabel)}</strong></div>
+          </div>
+          <p class="note">${escapeHtml(item.note)}</p>
+          <div class="card-actions">
+            <a class="open-link" href="${escapeAttr(item.url)}" target="_blank" rel="noopener">公式/検索ページを開く</a>
+            ${item.subUrl ? `<a class="sub-link" href="${escapeAttr(item.subUrl)}" target="_blank" rel="noopener">補助・制度を見る</a>` : ""}
+          </div>
         </div>
-        <div class="score">${item.score}</div>
-      </div>
-      <div class="badges">
-        ${item.tags.map((tag) => `<span class="badge ${badgeClass(tag)}">${escapeHtml(tag)}</span>`).join("")}
-      </div>
-      <div class="specs">
-        <div class="spec"><span>エリア</span><strong>${escapeHtml(item.area)}</strong></div>
-        <div class="spec"><span>間取り目安</span><strong>${escapeHtml(item.layoutLabel)}</strong></div>
-        <div class="spec"><span>家賃目安</span><strong>${escapeHtml(item.rentLabel)}</strong></div>
-        <div class="spec"><span>駅徒歩目安</span><strong>${escapeHtml(item.walkLabel)}</strong></div>
-      </div>
-      <p class="note">${escapeHtml(item.note)}</p>
-      <div class="card-actions">
-        <a class="open-link" href="${item.url}" target="_blank" rel="noopener">公式/検索ページを開く</a>
-        ${item.subUrl ? `<a class="sub-link" href="${item.subUrl}" target="_blank" rel="noopener">補助・制度を見る</a>` : ""}
-      </div>
-    </article>
-  `).join("");
+      </article>
+    `;
+  }).join("");
 }
 
 function renderNews() {
@@ -178,7 +191,7 @@ function renderNews() {
       <span class="news-source">${escapeHtml(item.source)}</span>
       <h3>${escapeHtml(item.title)}</h3>
       <p>${escapeHtml(item.summary)}</p>
-      <a href="${item.url}" target="_blank" rel="noopener">詳細を見る</a>
+      <a href="${escapeAttr(item.url)}" target="_blank" rel="noopener">詳細を見る</a>
     </article>
   `).join("");
 }
@@ -190,6 +203,10 @@ function escapeHtml(str) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function escapeAttr(str) {
+  return escapeHtml(str);
 }
 
 Object.values(filters).forEach((el) => {
