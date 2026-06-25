@@ -1,0 +1,47 @@
+{
+  "generatedAt": "2026-06-25T04:40:29.863Z",
+  "diagnostics": [
+    {
+      "source": "UR都市機構",
+      "ok": true,
+      "count": 3,
+      "url": "https://www.ur-net.go.jp/chintai/kyushu/fukuoka/result/?area=01&skcs=133&skcs=131&skcs=134&skcs=137&skcs=136&area=01&skcs=133&skcs=131&skcs=134&skcs=137&skcs=136&rent_low=&rent_high=&rent_low=&rent_high=&walk=&walk=&floorspace_low=&floorspace_high=&floorspace_low=&floorspace_high=&years=&years=&tdfk=40&todofuken=fukuoka"
+    },
+    {
+      "source": "LIFULL HOME'S",
+      "ok": true,
+      "count": 1,
+      "url": "https://www.homes.co.jp/chintai/fukuoka/fukuoka-city/list/"
+    },
+    {
+      "source": "SUUMO",
+      "ok": true,
+      "count": 10,
+      "url": "https://suumo.jp/chintai/fukuoka/sa_fukuoka/"
+    },
+    {
+      "source": "アットホーム",
+      "ok": true,
+      "count": 1,
+      "url": "https://www.athome.co.jp/chintai/fukuoka/fukuoka-city/list/"
+    },
+    {
+      "source": "CHINTAI",
+      "ok": true,
+      "count": 1,
+      "url": "https://www.chintai.net/fukuoka/area/40130/list/"
+    },
+    {
+      "source": "セーフティネット住宅",
+      "ok": true,
+      "count": 1,
+      "url": "https://www.safetynet-jutaku.jp/guest/index.php"
+    },
+    {
+      "source": "福岡市 居住支援",
+      "ok": true,
+      "count": 1,
+      "url": "https://www.city.fukuoka.lg.jp/jutaku-toshi/jigyochosei/life/kyojuushienkyougikai.html"
+    }
+  ]
+}
