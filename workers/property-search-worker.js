@@ -1,5 +1,4 @@
 // Cloudflare Workers API for home-select
-//
 // Google Programmable Search API connector version.
 //
 // Required Cloudflare Workers secrets:
@@ -39,73 +38,35 @@ const AREA_PRIORITY = {
   "宇美町": 50
 };
 
-const AREA_KEYWORDS = [
-  "福岡市西区",
-  "福岡市早良区",
-  "福岡市城南区",
-  "福岡市中央区",
-  "福岡市博多区",
-  "福岡市東区",
-  "福岡市南区",
-  "糸島市",
-  "春日市",
-  "大野城市",
-  "那珂川市",
-  "古賀市",
-  "新宮町",
-  "粕屋町",
-  "志免町",
-  "太宰府市",
-  "宇美町"
-];
+const AREA_KEYWORDS = Object.keys(AREA_PRIORITY);
 
 const SEED_PROPERTIES = [
   {
-    title: "UR賃貸 福岡市西区エリア検索",
-    subtitle: "西区を最優先に、2LDK以上・管理費込み条件で探す起点",
+    title: "UR賃貸 福岡市エリア検索",
+    subtitle: "UR公式サイトの福岡県エリア検索です。実検索で候補が少ない場合の補助導線です。",
     area: "福岡市西区",
     areaGroup: "fukuoka_city",
     type: "ur",
+    source: "UR都市機構",
     layoutMin: 2,
-    layoutLabel: "2LDK以上対応",
+    layoutLabel: "2LDK以上 / 要確認",
     rentHint: 10,
-    rentLabel: "10万円以内で検索可",
+    rentLabel: "10万円以内 / 要確認",
     walkHint: 15,
-    walkLabel: "15分以内で検索可",
+    walkLabel: "徒歩15分以内 / 要確認",
     flexibleRent: true,
     flexibleWalk: true,
-    tags: ["UR", "公的", "保証人不要", "2LDK以上", "代表画像"],
+    tags: ["UR", "公的", "保証人不要", "代表画像"],
     note: "URは保証人不要・更新料なし等の特徴があるため、定年後・無職可能性ありの住み替え候補として優先度が高いです。",
     url: "https://www.ur-net.go.jp/chintai/kyushu/fukuoka/area/",
     subUrl: "https://www.ur-net.go.jp/chintai/about/",
-    imageUrl: "https://images.unsplash.com/photo-1560184897-ae75f418493e?auto=format&fit=crop&w=900&q=75",
+    imageUrl: DEFAULT_IMAGE,
     imageLabel: "代表画像"
-  },
-  {
-    title: "福岡市 居住支援協議会・住まいサポートふくおか",
-    subtitle: "高齢者などの民間賃貸入居を支援する相談導線",
-    area: "福岡市中央区",
-    areaGroup: "fukuoka_city",
-    type: "safety",
-    layoutMin: 2,
-    layoutLabel: "相談先",
-    rentHint: 10,
-    rentLabel: "制度・相談で確認",
-    walkHint: 15,
-    walkLabel: "物件ごとに確認",
-    flexibleRent: true,
-    flexibleWalk: true,
-    tags: ["行政", "高齢者相談", "保証会社", "条件要確認", "代表画像"],
-    note: "無職・年金見込み・保証人問題が心配な場合、物件探しと並行して最優先で確認したい相談窓口です。",
-    url: "https://www.city.fukuoka.lg.jp/jutaku-toshi/jigyochosei/life/kyojuushienkyougikai.html",
-    subUrl: "https://www.city.fukuoka.lg.jp/",
-    imageUrl: "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=900&q=75",
-    imageLabel: "相談・支援"
   }
 ];
 
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, env) {
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: CORS_HEADERS });
     }
@@ -124,21 +85,12 @@ export default {
     if (url.pathname === "/search" || url.pathname === "/") {
       const filters = parseFilters(url.searchParams);
 
-      const cacheKey = new Request(url.toString(), request);
-      const cached = await caches.default.match(cacheKey);
-      if (cached) return cached;
-
-      let result;
-
       if (!env.GOOGLE_API_KEY || !env.GOOGLE_CSE_ID) {
-        result = buildSeedResponse(filters, "missing-google-secrets", "Google API Key または Search Engine ID が未設定です。WorkersのSecret設定後に実検索へ切り替わります。");
-      } else {
-        result = await buildGoogleSearchResponse(env, filters);
+        return json(buildSeedResponse(filters, "missing-google-secrets", "Google API Key または Search Engine ID が未設定です。WorkersのSecret設定後に実検索へ切り替わります。"));
       }
 
-      const response = json(result);
-      ctx.waitUntil(caches.default.put(cacheKey, response.clone()));
-      return response;
+      const result = await buildGoogleSearchResponse(env, filters);
+      return json(result);
     }
 
     return json({ ok: false, error: "Not found" }, 404);
@@ -148,13 +100,12 @@ export default {
 async function buildGoogleSearchResponse(env, filters) {
   const errors = [];
   const propertyQueries = buildPropertyQueries(filters);
-  const newsQuery = buildNewsQuery();
-
+  const newsQuery = buildNewsQuery(filters);
   const propertyResults = [];
 
   for (const queryInfo of propertyQueries) {
     try {
-      const items = await googleSearch(env, queryInfo.query, 5);
+      const items = await googleSearch(env, queryInfo.query, 10);
       for (const item of items) {
         const normalized = normalizeProperty(item, queryInfo, filters);
         if (normalized) propertyResults.push(normalized);
@@ -166,7 +117,7 @@ async function buildGoogleSearchResponse(env, filters) {
 
   const news = [];
   try {
-    const newsItems = await googleSearch(env, newsQuery, 5);
+    const newsItems = await googleSearch(env, newsQuery, 10);
     for (const item of newsItems) {
       const normalized = normalizeNews(item);
       if (normalized) news.push(normalized);
@@ -179,16 +130,14 @@ async function buildGoogleSearchResponse(env, filters) {
     .filter((item) => item.type !== "senior")
     .filter((item) => isAreaMatch(item, filters.area))
     .filter((item) => isTypeMatch(item, filters.type))
-    .filter((item) => item.layoutMin <= filters.layout)
-    .filter((item) => item.rentHint <= filters.rent || item.flexibleRent)
-    .filter((item) => item.walkHint <= filters.walk || item.flexibleWalk)
     .map((item) => ({ ...item, score: calcScore(item, filters) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
 
   if (!dedupedProperties.length) {
-    const fallback = buildSeedResponse(filters, "google-api-no-results", "Google APIには接続しましたが、条件に合う候補が十分に取れなかったため、補助候補を表示します。");
+    const fallback = buildSeedResponse(filters, "google-api-no-results", "Google APIには接続しましたが、対象ソースから物件候補を取得できませんでした。Programmable Search Engineの検索対象設定を確認してください。");
     fallback.meta.errors = errors;
+    fallback.meta.queries = propertyQueries.map((q) => q.query);
     return fallback;
   }
 
@@ -199,6 +148,7 @@ async function buildGoogleSearchResponse(env, filters) {
       generatedAt: new Date().toISOString(),
       filters,
       queryCount: propertyQueries.length + 1,
+      queries: propertyQueries.map((q) => q.query),
       errors
     },
     properties: dedupedProperties,
@@ -208,13 +158,9 @@ async function buildGoogleSearchResponse(env, filters) {
 
 function buildSeedResponse(filters, mode, message) {
   const properties = SEED_PROPERTIES
-    .filter((item) => item.type !== "senior")
     .filter((item) => isAreaMatch(item, filters.area))
     .filter((item) => isTypeMatch(item, filters.type))
-    .filter((item) => item.layoutMin <= filters.layout)
-    .filter((item) => item.rentHint <= filters.rent || item.flexibleRent)
-    .filter((item) => item.walkHint <= filters.walk || item.flexibleWalk)
-    .map((item) => ({ ...item, imageUrl: item.imageUrl || DEFAULT_IMAGE, score: calcScore(item, filters) }))
+    .map((item) => ({ ...item, score: calcScore(item, filters) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
 
@@ -232,68 +178,60 @@ function buildSeedResponse(filters, mode, message) {
 
 function buildPropertyQueries(filters) {
   const areaTerms = areaTermsFromFilter(filters.area);
-  const baseTerms = `${areaTerms} 2LDK 賃貸 管理費込み ${filters.rent}万円以内 徒歩${filters.walk}分以内 -サ高住 -サービス付き高齢者向け住宅`;
-
+  const rentTerm = filters.rent ? `${filters.rent}万円以内` : "";
+  const walkTerm = filters.walk && filters.walk < 999 ? `徒歩${filters.walk}分以内` : "";
+  const base = `${areaTerms} 賃貸 2LDK ${rentTerm} ${walkTerm} -サ高住 -サービス付き高齢者向け住宅 -老人ホーム -介護施設`;
+  const broad = `${areaTerms} 賃貸 2LDK -サ高住 -サービス付き高齢者向け住宅 -老人ホーム -介護施設`;
   const queries = [];
 
   if (["all", "public", "ur"].includes(filters.type)) {
-    queries.push({
-      label: "UR賃貸",
-      type: "ur",
-      source: "UR都市機構",
-      query: `site:ur-net.go.jp/chintai ${baseTerms} UR 賃貸`
-    });
+    queries.push({ label: "UR賃貸", type: "ur", source: "UR都市機構", query: `site:ur-net.go.jp/chintai 福岡 UR 賃貸 2LDK` });
+    queries.push({ label: "UR賃貸 エリア", type: "ur", source: "UR都市機構", query: `site:ur-net.go.jp/chintai ${areaTerms} UR 賃貸` });
   }
 
   if (["all", "public", "safety"].includes(filters.type)) {
-    queries.push({
-      label: "セーフティネット・居住支援",
-      type: "safety",
-      source: "行政・居住支援",
-      query: `(site:safetynet-jutaku.jp OR site:city.fukuoka.lg.jp OR site:pref.fukuoka.lg.jp) ${areaTerms} 賃貸 住宅 居住支援 高齢者 2LDK -サ高住`
-    });
+    queries.push({ label: "セーフティネット住宅", type: "safety", source: "セーフティネット住宅", query: `site:safetynet-jutaku.jp 福岡 賃貸 住宅` });
+    queries.push({ label: "福岡市 居住支援", type: "safety", source: "福岡市", query: `site:city.fukuoka.lg.jp 福岡市 居住支援 賃貸 高齢者` });
+    queries.push({ label: "福岡県 住宅支援", type: "safety", source: "福岡県", query: `site:pref.fukuoka.lg.jp 福岡県 住宅支援 賃貸 高齢者` });
   }
 
   if (["all", "private"].includes(filters.type)) {
-    queries.push({
-      label: "一般賃貸",
-      type: "private",
-      source: "一般賃貸検索",
-      query: `(site:homes.co.jp OR site:suumo.jp OR site:athome.co.jp OR site:chintai.net) ${baseTerms}`
-    });
+    queries.push({ label: "LIFULL HOME'S", type: "private", source: "LIFULL HOME'S", query: `site:homes.co.jp/chintai ${base}` });
+    queries.push({ label: "SUUMO", type: "private", source: "SUUMO", query: `site:suumo.jp/chintai ${base}` });
+    queries.push({ label: "アットホーム", type: "private", source: "アットホーム", query: `site:athome.co.jp ${base}` });
+    queries.push({ label: "CHINTAI", type: "private", source: "CHINTAI", query: `site:chintai.net ${base}` });
+    queries.push({ label: "一般賃貸 広め", type: "private", source: "一般賃貸検索", query: `(site:homes.co.jp OR site:suumo.jp OR site:athome.co.jp OR site:chintai.net) ${broad}` });
   }
 
   return queries;
 }
 
-function buildNewsQuery() {
-  return `(site:city.fukuoka.lg.jp OR site:pref.fukuoka.lg.jp OR site:mlit.go.jp OR site:safetynet-jutaku.jp) 福岡 高齢者 賃貸 補助 居住支援 家賃 住宅`;
+function buildNewsQuery(filters) {
+  const areaTerms = areaTermsFromFilter(filters.area);
+  return `(site:city.fukuoka.lg.jp OR site:pref.fukuoka.lg.jp OR site:mlit.go.jp OR site:safetynet-jutaku.jp) ${areaTerms} 高齢者 賃貸 補助 居住支援 住宅`;
 }
 
 function areaTermsFromFilter(areaFilter) {
-  if (areaFilter === "preferred_wards") return "福岡市西区 OR 福岡市早良区 OR 福岡市城南区";
+  if (areaFilter === "preferred_wards") return "福岡市西区 福岡市早良区 福岡市城南区";
   if (areaFilter === "fukuoka_city") return "福岡市 西区 早良区 城南区 中央区 博多区 東区 南区";
   if (areaFilter === "surrounding") return "糸島市 春日市 大野城市 那珂川市 古賀市 新宮町 粕屋町 志免町 太宰府市 宇美町";
-  return "福岡市 西区 早良区 城南区 中央区 博多区 東区 南区 糸島市 春日市 大野城市 那珂川市 古賀市 新宮町 粕屋町 志免町 太宰府市 宇美町";
+  return "福岡市 西区 早良区 城南区 中央区 博多区 東区 南区 糸島市 春日市 春日市 大野城市 那珂川市 古賀市 新宮町 粕屋町 志免町 太宰府市 宇美町";
 }
 
-async function googleSearch(env, query, num = 5) {
+async function googleSearch(env, query, num = 10) {
   const url = new URL(GOOGLE_SEARCH_ENDPOINT);
   url.searchParams.set("key", env.GOOGLE_API_KEY);
   url.searchParams.set("cx", env.GOOGLE_CSE_ID);
-  url.searchParams.set("q", query);
+  url.searchParams.set("q", query.replace(/\s+/g, " ").trim());
   url.searchParams.set("num", String(Math.min(Math.max(num, 1), 10)));
   url.searchParams.set("lr", "lang_ja");
   url.searchParams.set("gl", "jp");
   url.searchParams.set("safe", "active");
 
-  const res = await fetch(url.toString(), {
-    headers: { "Accept": "application/json" }
-  });
-
+  const res = await fetch(url.toString(), { headers: { Accept: "application/json" } });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Google API ${res.status}: ${body.slice(0, 200)}`);
+    throw new Error(`Google API ${res.status}: ${body.slice(0, 240)}`);
   }
 
   const data = await res.json();
@@ -306,8 +244,9 @@ function normalizeProperty(item, queryInfo, filters) {
   const url = item.link;
   const text = `${title} ${snippet} ${url}`;
 
-  if (!url || isExcluded(text)) return null;
-  if (!looksLikeRental(text, queryInfo.type)) return null;
+  if (!url || !title) return null;
+  if (isExcluded(text)) return null;
+  if (!looksLikeCandidate(text, queryInfo.type, url)) return null;
 
   const area = detectArea(text);
   const layout = extractLayout(text, filters.layout);
@@ -315,15 +254,15 @@ function normalizeProperty(item, queryInfo, filters) {
   const walk = extractWalk(text, filters.walk);
   const imageUrl = extractImage(item);
   const source = detectSource(url, queryInfo.source);
-
-  const tags = buildTags(queryInfo.type, source, text, imageUrl);
+  const type = detectType(url, queryInfo.type);
+  const tags = buildTags(type, source, text, imageUrl);
 
   return {
     title,
     subtitle: snippet || source,
     area,
     areaGroup: area.startsWith("福岡市") ? "fukuoka_city" : "surrounding",
-    type: queryInfo.type,
+    type,
     source,
     layoutMin: layout.min,
     layoutLabel: layout.label,
@@ -334,7 +273,7 @@ function normalizeProperty(item, queryInfo, filters) {
     flexibleRent: rent.flexible,
     flexibleWalk: walk.flexible,
     tags,
-    note: buildNote(queryInfo.type, source, text),
+    note: buildNote(type, source, rent.flexible || walk.flexible || layout.flexible),
     url,
     subUrl: source.includes("UR") ? "https://www.ur-net.go.jp/chintai/about/" : "https://www.city.fukuoka.lg.jp/",
     imageUrl: imageUrl || DEFAULT_IMAGE,
@@ -347,6 +286,7 @@ function normalizeNews(item) {
   const summary = clean(item.snippet || "");
   const url = item.link;
   if (!url || !title) return null;
+  if (isExcluded(`${title} ${summary} ${url}`)) return null;
   return {
     source: detectSource(url, "行政・住宅支援"),
     title,
@@ -360,46 +300,47 @@ function clean(value) {
 }
 
 function isExcluded(text) {
-  return /サ高住|サービス付き高齢者向け住宅|老人ホーム|介護施設|有料老人/.test(text);
+  return /サ高住|サービス付き高齢者向け住宅|老人ホーム|介護施設|有料老人|グループホーム/.test(text);
 }
 
-function looksLikeRental(text, type) {
-  if (type === "safety") return /賃貸|住宅|居住支援|セーフティネット|入居/.test(text);
+function looksLikeCandidate(text, type, url) {
+  if (type === "safety") return /賃貸|住宅|居住支援|セーフティネット|入居|住まい/.test(text);
+  if (/homes\.co\.jp|suumo\.jp|athome\.co\.jp|chintai\.net|ur-net\.go\.jp/.test(url)) return true;
   return /賃貸|マンション|アパート|UR|物件|住宅/.test(text);
 }
 
 function detectArea(text) {
   const found = AREA_KEYWORDS.find((area) => text.includes(area));
   if (found) return found;
-  if (/姪浜|今宿|九大学研都市|周船寺|橋本/.test(text)) return "福岡市西区";
-  if (/西新|藤崎|室見|百道|野芥/.test(text)) return "福岡市早良区";
+  if (/姪浜|今宿|九大学研都市|周船寺|橋本|下山門/.test(text)) return "福岡市西区";
+  if (/西新|藤崎|室見|百道|野芥|賀茂/.test(text)) return "福岡市早良区";
   if (/別府|七隈|茶山|金山|福大前/.test(text)) return "福岡市城南区";
-  if (/天神|薬院|六本松|大濠|唐人町/.test(text)) return "福岡市中央区";
-  if (/博多|吉塚|竹下|東比恵/.test(text)) return "福岡市博多区";
-  if (/香椎|千早|箱崎|和白/.test(text)) return "福岡市東区";
-  if (/大橋|高宮|井尻|平尾/.test(text)) return "福岡市南区";
+  if (/天神|薬院|六本松|大濠|唐人町|平尾/.test(text)) return "福岡市中央区";
+  if (/博多|吉塚|竹下|東比恵|千代/.test(text)) return "福岡市博多区";
+  if (/香椎|千早|箱崎|和白|照葉/.test(text)) return "福岡市東区";
+  if (/大橋|高宮|井尻|平尾|笹原/.test(text)) return "福岡市南区";
   return "福岡市西区";
 }
 
 function extractLayout(text, defaultLayout) {
   const match = text.match(/([1-5])\s?LDK|([1-5])\s?DK/i);
-  if (!match) return { min: defaultLayout, label: `${defaultLayout}LDK以上 / 要確認` };
+  if (!match) return { min: defaultLayout, label: `${defaultLayout}LDK以上 / 要確認`, flexible: true };
   const value = Number(match[1] || match[2] || defaultLayout);
-  return { min: value, label: `${value}${match[1] ? "LDK" : "DK"}` };
+  return { min: value, label: `${value}${match[1] ? "LDK" : "DK"}`, flexible: false };
 }
 
 function extractRent(text, defaultRent) {
-  const matches = [...text.matchAll(/(\d+(?:\.\d+)?)\s?万円/g)].map((m) => Number(m[1])).filter(Boolean);
+  const matches = [...text.matchAll(/(\d+(?:\.\d+)?)\s?万円/g)].map((m) => Number(m[1])).filter((n) => n >= 1 && n <= 50);
   if (!matches.length) return { value: defaultRent, label: `${defaultRent}万円以内 / 要確認`, flexible: true };
   const value = Math.min(...matches);
-  return { value, label: `${value}万円目安`, flexible: false };
+  return { value, label: `${value}万円目安`, flexible: value <= defaultRent };
 }
 
 function extractWalk(text, defaultWalk) {
   const match = text.match(/徒歩\s?(\d+)\s?分/);
   if (!match) return { value: defaultWalk, label: `徒歩${defaultWalk}分以内 / 要確認`, flexible: true };
   const value = Number(match[1]);
-  return { value, label: `徒歩${value}分` , flexible: false };
+  return { value, label: `徒歩${value}分`, flexible: value <= defaultWalk };
 }
 
 function extractImage(item) {
@@ -423,6 +364,13 @@ function detectSource(url, fallback) {
   return fallback;
 }
 
+function detectType(url, fallback) {
+  if (url.includes("ur-net.go.jp")) return "ur";
+  if (url.includes("city.fukuoka.lg.jp") || url.includes("pref.fukuoka.lg.jp") || url.includes("safetynet-jutaku.jp")) return "safety";
+  if (url.includes("homes.co.jp") || url.includes("suumo.jp") || url.includes("athome.co.jp") || url.includes("chintai.net")) return "private";
+  return fallback;
+}
+
 function buildTags(type, source, text, imageUrl) {
   const tags = [];
   if (type === "ur" || source.includes("UR")) tags.push("UR", "公的");
@@ -430,15 +378,15 @@ function buildTags(type, source, text, imageUrl) {
   if (type === "private") tags.push("一般賃貸");
   if (/保証人不要/.test(text)) tags.push("保証人不要");
   if (/保証会社/.test(text)) tags.push("保証会社");
-  if (/2LDK|3LDK|4LDK/.test(text)) tags.push("2LDK以上");
+  if (/2LDK|3LDK|4LDK|2DK|3DK/.test(text)) tags.push("2LDK以上");
   tags.push(imageUrl ? "取得画像" : "代表画像");
   return [...new Set(tags)];
 }
 
-function buildNote(type, source, text) {
+function buildNote(type, source, hasUnknowns) {
   if (type === "ur") return "Google検索結果から取得したUR関連候補です。実際の空室・家賃・入居条件はリンク先で確認してください。";
   if (type === "safety") return "行政・居住支援系の検索結果です。無職・年金見込み・保証人不安がある場合に優先確認してください。";
-  return `${source}の検索結果です。空室、管理費込み家賃、審査条件、画像利用可否はリンク先で確認してください。`;
+  return `${source}の検索結果です。${hasUnknowns ? "家賃・間取り・駅徒歩はリンク先で再確認してください。" : "空室、管理費込み家賃、審査条件はリンク先で確認してください。"}`;
 }
 
 function dedupeByUrl(items) {
@@ -509,9 +457,9 @@ function calcScore(item, filter) {
   if (item.tags.includes("UR")) score += 16;
   if (item.tags.includes("高齢者相談")) score += 12;
   if (item.tags.includes("保証人不要") || item.tags.includes("保証会社")) score += 10;
-  if (item.layoutMin <= filter.layout) score += 8;
-  if (item.rentHint <= filter.rent) score += 8;
-  if (item.walkHint <= filter.walk) score += 8;
+  if (!item.flexibleRent && item.rentHint <= filter.rent) score += 8;
+  if (!item.flexibleWalk && item.walkHint <= filter.walk) score += 8;
+  if (item.layoutMin >= filter.layout) score += 8;
 
   if (filter.priority === "unemployed") {
     if (item.tags.includes("保証人不要")) score += 18;
@@ -526,7 +474,7 @@ function calcScore(item, filter) {
   }
 
   if (filter.priority === "access") {
-    if (item.walkHint <= 10) score += 18;
+    if (!item.flexibleWalk && item.walkHint <= 10) score += 18;
     if (item.area.includes("中央区") || item.area.includes("博多区")) score += 8;
   }
 
@@ -539,7 +487,7 @@ function json(data, status = 200) {
     headers: {
       ...CORS_HEADERS,
       "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "public, max-age=300"
+      "Cache-Control": "no-store"
     }
   });
 }
