@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>福岡シニア賃貸ウォッチ</title>
+  <meta name="description" content="福岡市全域と周辺市町村で、定年後の夫婦2人暮らし向け賃貸を探すための物件監視サイト。" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <nav class="top-nav">
+      <div class="brand">
+        <span class="brand-mark">🏠</span>
+        <span>福岡シニア賃貸ウォッチ</span>
+      </div>
+      <a class="nav-link" href="#admin-news">行政支援を見る</a>
+    </nav>
+
+    <div class="hero-grid">
+      <section>
+        <p class="eyebrow">Fukuoka Retirement Rental Watch</p>
+        <h1>定年後の福岡移住に向けた<br />賃貸・公的住宅ウォッチ</h1>
+        <p class="hero-lead">
+          優さんとの2人暮らしを想定し、福岡市全域・周辺市町村から
+          <strong>2LDK以上 / 管理費込み10万円以内 / 駅徒歩15分以内</strong>を中心に探すためのサイトです。
+        </p>
+        <div class="hero-actions">
+          <a class="primary-action" href="#property-list">候補を見る</a>
+          <a class="secondary-action" href="#search-panel">条件を変更</a>
+        </div>
+      </section>
+
+      <aside class="strategy-card">
+        <span class="strategy-label">検索優先順位</span>
+        <ol>
+          <li>UR・公的賃貸・行政斡旋</li>
+          <li>高齢者入居相談可・保証会社利用可</li>
+          <li>福岡市全域、特に西区・早良区・城南区</li>
+          <li>福岡市周辺市町村も含めて比較</li>
+        </ol>
+      </aside>
+    </div>
+  </header>
+
+  <main>
+    <section id="search-panel" class="panel search-panel">
+      <div class="section-title">
+        <div>
+          <p class="section-kicker">Search Conditions</p>
+          <h2>🔎 監視条件</h2>
+        </div>
+        <button id="resetButton" class="ghost-button" type="button">初期条件に戻す</button>
+      </div>
+
+      <form class="filters" aria-label="物件検索条件">
+        <label>
+          エリア
+          <select id="areaFilter">
+            <option value="all">福岡市全域＋周辺市町村</option>
+            <option value="fukuoka_city">福岡市全域</option>
+            <option value="preferred_wards">西区・早良区・城南区を優先</option>
+            <option value="surrounding">福岡市周辺市町村</option>
+          </select>
+        </label>
+
+        <label>
+          最低間取り
+          <select id="layoutFilter">
+            <option value="2">2LDK以上</option>
+            <option value="3">3LDK以上</option>
+          </select>
+        </label>
+
+        <label>
+          管理費込み家賃上限
+          <select id="rentFilter">
+            <option value="8">8万円以内</option>
+            <option value="9">9万円以内</option>
+            <option value="10" selected>10万円以内</option>
+            <option value="11">11万円以内</option>
+            <option value="12">12万円以内</option>
+            <option value="15">15万円以内</option>
+          </select>
+        </label>
+
+        <label>
+          駅徒歩
+          <select id="walkFilter">
+            <option value="10">10分以内</option>
+            <option value="15" selected>15分以内</option>
+            <option value="20">20分以内</option>
+            <option value="999">バス利用も含む</option>
+          </select>
+        </label>
+
+        <label>
+          住宅タイプ
+          <select id="typeFilter">
+            <option value="all">すべて</option>
+            <option value="public">UR・公的・行政系</option>
+            <option value="ur">UR賃貸</option>
+            <option value="safety">セーフティネット・居住支援</option>
+            <option value="senior">高齢者向け住宅</option>
+            <option value="private">一般賃貸</option>
+          </select>
+        </label>
+
+        <label>
+          重視条件
+          <select id="priorityFilter">
+            <option value="balanced">総合バランス</option>
+            <option value="unemployed">無職・年金見込み相談</option>
+            <option value="publicFirst">公的住宅を最優先</option>
+            <option value="access">駅近・生活利便性</option>
+          </select>
+        </label>
+      </form>
+
+      <div class="summary-strip">
+        <div>
+          <span id="matchCount">0</span>
+          <small>件の候補</small>
+        </div>
+        <div>
+          <span id="topArea">-</span>
+          <small>最優先エリア</small>
+        </div>
+        <div>
+          <span id="publicCount">0</span>
+          <small>公的・行政系</small>
+        </div>
+      </div>
+    </section>
+
+    <section id="property-list" class="panel">
+      <div class="section-title">
+        <div>
+          <p class="section-kicker">Rental Candidates</p>
+          <h2>🏘️ 条件に近い候補・検索導線</h2>
+          <p class="muted">
+            第1版は、物件サイトの規約に配慮して「公式検索リンク・行政系リンク」を中心に表示します。
+            実データ取得は第2版でCloudflare Workers等へ接続予定です。
+          </p>
+        </div>
+        <span class="updated">条件初期値：2LDK以上 / 管込10万円 / 徒歩15分</span>
+      </div>
+
+      <div id="cards" class="card-grid" aria-live="polite"></div>
+    </section>
+
+    <section id="admin-news" class="panel admin-panel">
+      <div class="section-title">
+        <div>
+          <p class="section-kicker">Administrative Support</p>
+          <h2>📰 行政支援・補助・関連ニュース</h2>
+          <p class="muted">
+            福岡市・福岡県・国交省系の住宅支援や、住み替え相談先を優先表示します。
+          </p>
+        </div>
+      </div>
+
+      <div id="newsCards" class="news-grid"></div>
+    </section>
+
+    <section class="panel roadmap">
+      <div class="section-title">
+        <div>
+          <p class="section-kicker">Next Build</p>
+          <h2>🛠️ 次に追加する機能</h2>
+        </div>
+      </div>
+      <div class="roadmap-grid">
+        <article>
+          <strong>Step 1</strong>
+          <h3>GitHub Pages公開</h3>
+          <p>この静的サイトをGitHub Pagesで公開し、URLから見られる状態にします。</p>
+        </article>
+        <article>
+          <strong>Step 2</strong>
+          <h3>検索API接続</h3>
+          <p>Cloudflare Workersを使い、UR・行政情報・検索APIの結果を整形して表示します。</p>
+        </article>
+        <article>
+          <strong>Step 3</strong>
+          <h3>毎日監視</h3>
+          <p>条件一致物件や支援制度ニュースに変化があったとき、レポート化します。</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>© 2026 福岡シニア賃貸ウォッチ / home-select</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
