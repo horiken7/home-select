@@ -1,13 +1,8 @@
 // Cloudflare Workers API endpoint configuration
 //
-// まだWorkersを公開していない間は apiEndpoint を空欄のままにしてください。
-// Workers公開後に、例のようにURLを入れると、サイトはAPI優先でデータを取得します。
-//
-// 例:
-// window.HOME_SELECT_CONFIG = {
-//   apiEndpoint: "https://home-select-search.your-subdomain.workers.dev"
-// };
+// GitHub Pages frontend uses this endpoint first.
+// If the API request fails, app.js falls back to local JSON data.
 
 window.HOME_SELECT_CONFIG = {
-  apiEndpoint: ""
+  apiEndpoint: "https://home-select-search.ken060720.workers.dev"
 };
