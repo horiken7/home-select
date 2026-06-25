@@ -23,7 +23,8 @@ const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1560448204-e02f11c3d0e
 const state = {
   properties: [],
   news: [],
-  dataMode: "loading"
+  dataMode: "loading",
+  isDirty: false
 };
 
 const qs = (selector) => document.querySelector(selector);
@@ -43,26 +44,44 @@ function getApiEndpoint() {
 
 async function loadData() {
   setDataStatus("loading", "データ取得モードを確認中", "API設定があればCloudflare Workersから取得し、未設定ならローカルJSONを表示します。");
+  await runSearch({ scrollToResults: false });
+}
 
+async function runSearch(options = {}) {
+  const { scrollToResults = true } = options;
   const apiEndpoint = getApiEndpoint();
+  setSearchButtonsLoading(true);
 
   if (apiEndpoint) {
     try {
       await loadFromApi(apiEndpoint);
+      markClean();
+      if (scrollToResults) scrollToPropertyList();
       return;
     } catch (error) {
       console.warn("API取得に失敗したため、ローカルJSONへ切り替えます。", error);
       setDataStatus("error", "API取得に失敗。ローカルJSONに切り替えました", "Workers APIのURL、CORS、デプロイ状態を確認してください。");
       await loadFromLocal();
+      markClean();
+      if (scrollToResults) scrollToPropertyList();
       return;
+    } finally {
+      setSearchButtonsLoading(false);
     }
   }
 
-  await loadFromLocal();
-  setDataStatus("local", "ローカルJSON表示中", "Cloudflare Workers APIは未設定です。config.js にAPI URLを入れるとAPI優先になります。");
+  try {
+    await loadFromLocal();
+    setDataStatus("local", "ローカルJSON表示中", "Cloudflare Workers APIは未設定です。config.js にAPI URLを入れるとAPI優先になります。");
+    markClean();
+    if (scrollToResults) scrollToPropertyList();
+  } finally {
+    setSearchButtonsLoading(false);
+  }
 }
 
 async function loadFromApi(apiEndpoint) {
+  setDataStatus("loading", "検索中", "指定された条件でCloudflare Workers APIへ問い合わせています。");
   const url = buildApiUrl(apiEndpoint);
   const res = await fetch(url.toString(), { cache: "no-store" });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
@@ -100,6 +119,7 @@ function buildApiUrl(apiEndpoint) {
   url.searchParams.set("walk", String(filter.walk));
   url.searchParams.set("type", filter.type);
   url.searchParams.set("priority", filter.priority);
+  url.searchParams.set("ts", String(Date.now()));
   return url;
 }
 
@@ -125,6 +145,31 @@ function getFilterValues() {
     type: filters.type.value,
     priority: filters.priority.value
   };
+}
+
+function markDirty() {
+  state.isDirty = true;
+  const hint = qs("#filterHint");
+  if (hint) hint.textContent = "条件が変更されています。結果を更新するには「この条件で再検索」を押してください。";
+  setDataStatus("dirty", "条件が変更されています", "新しい条件で検索するには「この条件で再検索」を押してください。現在表示中の結果は前回検索分です。");
+}
+
+function markClean() {
+  state.isDirty = false;
+  const hint = qs("#filterHint");
+  if (hint) hint.textContent = "条件を変更したら「この条件で再検索」を押してください。";
+}
+
+function setSearchButtonsLoading(isLoading) {
+  [qs("#searchButton"), qs("#searchButtonTop")].forEach((button) => {
+    if (!button) return;
+    button.disabled = isLoading;
+    button.textContent = isLoading ? "検索中..." : "この条件で再検索";
+  });
+}
+
+function scrollToPropertyList() {
+  qs("#property-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function isAreaMatch(item, areaFilter) {
@@ -277,19 +322,11 @@ function escapeAttr(str) {
 }
 
 Object.values(filters).forEach((el) => {
-  el.addEventListener("change", async () => {
-    const apiEndpoint = getApiEndpoint();
-    if (apiEndpoint) {
-      try {
-        await loadFromApi(apiEndpoint);
-        return;
-      } catch (error) {
-        console.warn("API再取得に失敗しました。現在のデータで再表示します。", error);
-        setDataStatus("error", "API再取得に失敗", "現在読み込まれているデータを使って再表示します。");
-      }
-    }
-    render();
-  });
+  el.addEventListener("change", markDirty);
+});
+
+[qs("#searchButton"), qs("#searchButtonTop")].forEach((button) => {
+  button?.addEventListener("click", () => runSearch({ scrollToResults: true }));
 });
 
 qs("#resetButton").addEventListener("click", async () => {
@@ -299,18 +336,7 @@ qs("#resetButton").addEventListener("click", async () => {
   filters.walk.value = "15";
   filters.type.value = "all";
   filters.priority.value = "balanced";
-
-  const apiEndpoint = getApiEndpoint();
-  if (apiEndpoint) {
-    try {
-      await loadFromApi(apiEndpoint);
-      return;
-    } catch (error) {
-      console.warn("API再取得に失敗しました。", error);
-      setDataStatus("error", "API再取得に失敗", "現在読み込まれているデータを使って再表示します。");
-    }
-  }
-  render();
+  await runSearch({ scrollToResults: true });
 });
 
 loadData().catch((error) => {
