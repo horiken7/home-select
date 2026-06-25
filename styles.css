@@ -67,9 +67,15 @@ select { width:100%; margin-top:6px; padding:12px 14px; border:1px solid var(--l
 .summary-strip small { color:var(--muted); font-weight:800; }
 .updated { white-space:nowrap; background:var(--blue-soft); color:var(--primary-dark); border-radius:999px; padding:8px 12px; font-size:.78rem; font-weight:900; }
 .card-grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:18px; }
-.property-card,.news-card,.roadmap article { border:1px solid var(--line); border-radius:var(--radius-md); padding:20px; background:linear-gradient(180deg,#fff 0%,#fbfdff 100%); transition:transform .15s ease, box-shadow .15s ease; }
+.property-card,.news-card,.roadmap article { border:1px solid var(--line); border-radius:var(--radius-md); background:linear-gradient(180deg,#fff 0%,#fbfdff 100%); transition:transform .15s ease, box-shadow .15s ease; overflow:hidden; }
+.news-card,.roadmap article { padding:20px; }
 .property-card:hover,.news-card:hover,.roadmap article:hover { transform:translateY(-3px); box-shadow:0 18px 36px rgba(15,23,42,.09); }
 .property-card.top-pick { border:2px solid rgba(37,99,235,.35); background:linear-gradient(180deg,#f7fbff 0%,#fff 100%); }
+.property-image { position:relative; display:block; width:100%; aspect-ratio:16/9; overflow:hidden; background:#dbeafe; }
+.property-image img { width:100%; height:100%; object-fit:cover; display:block; transition:transform .25s ease; }
+.property-card:hover .property-image img { transform:scale(1.035); }
+.property-image span { position:absolute; left:12px; bottom:12px; border-radius:999px; padding:5px 10px; background:rgba(15,23,42,.72); color:white; font-size:.72rem; font-weight:900; backdrop-filter:blur(8px); }
+.property-body { padding:20px; }
 .card-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
 .score { display:grid; place-items:center; min-width:56px; height:56px; border-radius:18px; color:var(--primary-dark); background:var(--blue-soft); font-weight:950; }
 .badges { display:flex; flex-wrap:wrap; gap:7px; margin:12px 0; }
@@ -105,4 +111,5 @@ select { width:100%; margin-top:6px; padding:12px 14px; border:1px solid var(--l
   .top-nav { align-items:flex-start; gap:12px; flex-direction:column; margin-bottom:36px; }
   .panel { padding:18px; border-radius:22px; }
   .summary-strip,.specs { grid-template-columns:1fr; }
+  .property-body { padding:16px; }
 }
