@@ -33,17 +33,25 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Set Google API Key Secret
-        if: ${{ secrets.GOOGLE_API_KEY != '' }}
-        run: echo "$GOOGLE_API_KEY" | npx wrangler secret put GOOGLE_API_KEY
+      - name: Set Google API Key Secret if present
+        run: |
+          if [ -n "$GOOGLE_API_KEY" ]; then
+            echo "$GOOGLE_API_KEY" | npx wrangler secret put GOOGLE_API_KEY
+          else
+            echo "GOOGLE_API_KEY is not set. Skipping."
+          fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
 
-      - name: Set Google CSE ID Secret
-        if: ${{ secrets.GOOGLE_CSE_ID != '' }}
-        run: echo "$GOOGLE_CSE_ID" | npx wrangler secret put GOOGLE_CSE_ID
+      - name: Set Google CSE ID Secret if present
+        run: |
+          if [ -n "$GOOGLE_CSE_ID" ]; then
+            echo "$GOOGLE_CSE_ID" | npx wrangler secret put GOOGLE_CSE_ID
+          else
+            echo "GOOGLE_CSE_ID is not set. Skipping."
+          fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
