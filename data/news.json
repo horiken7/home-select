@@ -19,12 +19,6 @@
   },
   {
     "source": "国土交通省系",
-    "title": "サービス付き高齢者向け住宅 情報提供システム",
-    "summary": "見守りや生活相談サービス付き住宅を比較するための公式系検索。費用条件は物件ごとに要確認です。",
-    "url": "https://www.satsuki-jutaku.mlit.go.jp/search/list.php?pref_code=40"
-  },
-  {
-    "source": "国土交通省系",
     "title": "セーフティネット住宅情報提供システム",
     "summary": "高齢者など住宅確保要配慮者向けの登録住宅を探す入口。福岡市の支援制度と合わせて確認します。",
     "url": "https://www.safetynet-jutaku.jp/guest/index.php"
@@ -34,5 +28,11 @@
     "title": "住宅相談・住まいの情報",
     "summary": "福岡県内の住宅相談や住まいに関する情報提供の窓口。制度確認時の補助線として使います。",
     "url": "https://www.fkjc.or.jp/"
+  },
+  {
+    "source": "監視キーワード",
+    "title": "福岡市 高齢者 賃貸 補助・家賃支援",
+    "summary": "次段階で、福岡市・福岡県・国の補助金や居住支援ニュースを検索APIで定期監視します。",
+    "url": "https://www.city.fukuoka.lg.jp/"
   }
 ]
