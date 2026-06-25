@@ -22,7 +22,8 @@ const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1560448204-e02f11c3d0e
 
 const state = {
   properties: [],
-  news: []
+  news: [],
+  dataMode: "loading"
 };
 
 const qs = (selector) => document.querySelector(selector);
@@ -36,7 +37,47 @@ const filters = {
   priority: qs("#priorityFilter")
 };
 
+function getApiEndpoint() {
+  return window.HOME_SELECT_CONFIG?.apiEndpoint?.replace(/\/$/, "") || "";
+}
+
 async function loadData() {
+  setDataStatus("loading", "データ取得モードを確認中", "API設定があればCloudflare Workersから取得し、未設定ならローカルJSONを表示します。");
+
+  const apiEndpoint = getApiEndpoint();
+
+  if (apiEndpoint) {
+    try {
+      await loadFromApi(apiEndpoint);
+      return;
+    } catch (error) {
+      console.warn("API取得に失敗したため、ローカルJSONへ切り替えます。", error);
+      setDataStatus("error", "API取得に失敗。ローカルJSONに切り替えました", "Workers APIのURL、CORS、デプロイ状態を確認してください。");
+      await loadFromLocal();
+      return;
+    }
+  }
+
+  await loadFromLocal();
+  setDataStatus("local", "ローカルJSON表示中", "Cloudflare Workers APIは未設定です。config.js にAPI URLを入れるとAPI優先になります。");
+}
+
+async function loadFromApi(apiEndpoint) {
+  const url = buildApiUrl(apiEndpoint);
+  const res = await fetch(url.toString(), { cache: "no-store" });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+
+  const data = await res.json();
+  state.properties = Array.isArray(data.properties) ? data.properties : [];
+  state.news = Array.isArray(data.news) ? data.news : [];
+  state.dataMode = data.meta?.mode || "api";
+
+  setDataStatus("api-ok", "Cloudflare Workers API接続中", data.meta?.message || "APIから検索候補と行政情報を取得しています。");
+  render();
+  renderNews();
+}
+
+async function loadFromLocal() {
   const [properties, news] = await Promise.all([
     fetch("data/properties.json").then((res) => res.json()),
     fetch("data/news.json").then((res) => res.json())
@@ -44,9 +85,35 @@ async function loadData() {
 
   state.properties = properties;
   state.news = news;
+  state.dataMode = "local-json";
 
   render();
   renderNews();
+}
+
+function buildApiUrl(apiEndpoint) {
+  const filter = getFilterValues();
+  const url = new URL(`${apiEndpoint}/search`);
+  url.searchParams.set("area", filter.area);
+  url.searchParams.set("layout", String(filter.layout));
+  url.searchParams.set("rent", String(filter.rent));
+  url.searchParams.set("walk", String(filter.walk));
+  url.searchParams.set("type", filter.type);
+  url.searchParams.set("priority", filter.priority);
+  return url;
+}
+
+function setDataStatus(mode, title, message) {
+  const el = qs("#dataStatus");
+  if (!el) return;
+  el.className = `data-status ${mode}`;
+  el.innerHTML = `
+    <span class="status-dot"></span>
+    <div>
+      <strong>${escapeHtml(title)}</strong>
+      <p>${escapeHtml(message)}</p>
+    </div>
+  `;
 }
 
 function getFilterValues() {
@@ -120,7 +187,7 @@ function filterProperties() {
     .filter((item) => item.layoutMin <= filter.layout)
     .filter((item) => item.rentHint <= filter.rent || item.flexibleRent)
     .filter((item) => item.walkHint <= filter.walk || item.flexibleWalk)
-    .map((item) => ({ ...item, score: calcScore(item, filter) }))
+    .map((item) => ({ ...item, score: typeof item.score === "number" ? item.score : calcScore(item, filter) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
 }
@@ -210,20 +277,44 @@ function escapeAttr(str) {
 }
 
 Object.values(filters).forEach((el) => {
-  el.addEventListener("change", render);
+  el.addEventListener("change", async () => {
+    const apiEndpoint = getApiEndpoint();
+    if (apiEndpoint) {
+      try {
+        await loadFromApi(apiEndpoint);
+        return;
+      } catch (error) {
+        console.warn("API再取得に失敗しました。現在のデータで再表示します。", error);
+        setDataStatus("error", "API再取得に失敗", "現在読み込まれているデータを使って再表示します。");
+      }
+    }
+    render();
+  });
 });
 
-qs("#resetButton").addEventListener("click", () => {
+qs("#resetButton").addEventListener("click", async () => {
   filters.area.value = "all";
   filters.layout.value = "2";
   filters.rent.value = "10";
   filters.walk.value = "15";
   filters.type.value = "all";
   filters.priority.value = "balanced";
+
+  const apiEndpoint = getApiEndpoint();
+  if (apiEndpoint) {
+    try {
+      await loadFromApi(apiEndpoint);
+      return;
+    } catch (error) {
+      console.warn("API再取得に失敗しました。", error);
+      setDataStatus("error", "API再取得に失敗", "現在読み込まれているデータを使って再表示します。");
+    }
+  }
   render();
 });
 
 loadData().catch((error) => {
   console.error(error);
+  setDataStatus("error", "データの読み込みに失敗しました", "GitHub Pages上で開くか、ファイル構成を確認してください。");
   qs("#cards").innerHTML = `<div class="empty">データの読み込みに失敗しました。GitHub Pages上で開くか、ローカルサーバー経由で確認してください。</div>`;
 });
