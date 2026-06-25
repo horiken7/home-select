@@ -1,0 +1,42 @@
+name: Scrape Rental Properties
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "10 21 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Scrape property data
+        run: npm run scrape:properties
+
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/properties.json data/scrape-diagnostics.json
+          if git diff --cached --quiet; then
+            echo "No property data changes."
+          else
+            git commit -m "Update scraped rental properties"
+            git push
+          fi
