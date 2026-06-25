@@ -4,6 +4,13 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "10 21 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - "scripts/scrape-properties.mjs"
+      - "package.json"
+      - ".github/workflows/scrape-properties.yml"
 
 permissions:
   contents: write
