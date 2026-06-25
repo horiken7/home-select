@@ -15,7 +15,8 @@ const AREA_PRIORITY = {
   "粕屋町": 56,
   "志免町": 54,
   "太宰府市": 52,
-  "宇美町": 50
+  "宇美町": 50,
+  "福岡市全域": 55
 };
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=900&q=75";
@@ -23,7 +24,7 @@ const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1560448204-e02f11c3d0e
 const state = {
   properties: [],
   news: [],
-  dataMode: "loading",
+  diagnostics: null,
   isDirty: false
 };
 
@@ -38,41 +39,24 @@ const filters = {
   priority: qs("#priorityFilter")
 };
 
-function getApiEndpoint() {
-  return window.HOME_SELECT_CONFIG?.apiEndpoint?.replace(/\/$/, "") || "";
-}
-
 async function loadData() {
-  setDataStatus("loading", "データ取得モードを確認中", "API設定があればCloudflare Workersから取得し、未設定ならローカルJSONを表示します。");
-  await runSearch({ scrollToResults: false });
+  setDataStatus("loading", "GitHub Actions取得データを読み込み中", "Google APIではなく、Playwrightで取得した data/properties.json を表示します。");
+
+  try {
+    await loadFromGeneratedJson();
+    markClean();
+  } catch (error) {
+    console.error(error);
+    setDataStatus("error", "データの読み込みに失敗しました", "GitHub Pages上で開くか、data/properties.json の生成状態を確認してください。");
+    qs("#cards").innerHTML = `<div class="empty">データの読み込みに失敗しました。GitHub Actions の Scrape Rental Properties を実行してください。</div>`;
+  }
 }
 
 async function runSearch(options = {}) {
   const { scrollToResults = true } = options;
-  const apiEndpoint = getApiEndpoint();
   setSearchButtonsLoading(true);
-
-  if (apiEndpoint) {
-    try {
-      await loadFromApi(apiEndpoint);
-      markClean();
-      if (scrollToResults) scrollToPropertyList();
-      return;
-    } catch (error) {
-      console.warn("API取得に失敗したため、ローカルJSONへ切り替えます。", error);
-      setDataStatus("error", "API取得に失敗。ローカルJSONに切り替えました", "Workers APIのURL、CORS、デプロイ状態を確認してください。");
-      await loadFromLocal();
-      markClean();
-      if (scrollToResults) scrollToPropertyList();
-      return;
-    } finally {
-      setSearchButtonsLoading(false);
-    }
-  }
-
   try {
-    await loadFromLocal();
-    setDataStatus("local", "ローカルJSON表示中", "Cloudflare Workers APIは未設定です。config.js にAPI URLを入れるとAPI優先になります。");
+    await loadFromGeneratedJson();
     markClean();
     if (scrollToResults) scrollToPropertyList();
   } finally {
@@ -80,47 +64,33 @@ async function runSearch(options = {}) {
   }
 }
 
-async function loadFromApi(apiEndpoint) {
-  setDataStatus("loading", "検索中", "指定された条件でCloudflare Workers APIへ問い合わせています。");
-  const url = buildApiUrl(apiEndpoint);
-  const res = await fetch(url.toString(), { cache: "no-store" });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-
-  const data = await res.json();
-  state.properties = Array.isArray(data.properties) ? data.properties : [];
-  state.news = Array.isArray(data.news) ? data.news : [];
-  state.dataMode = data.meta?.mode || "api";
-
-  setDataStatus("api-ok", "Cloudflare Workers API接続中", data.meta?.message || "APIから検索候補と行政情報を取得しています。");
-  render();
-  renderNews();
-}
-
-async function loadFromLocal() {
-  const [properties, news] = await Promise.all([
-    fetch("data/properties.json").then((res) => res.json()),
-    fetch("data/news.json").then((res) => res.json())
+async function loadFromGeneratedJson() {
+  const cacheBust = `?ts=${Date.now()}`;
+  const [properties, news, diagnostics] = await Promise.all([
+    fetch(`data/properties.json${cacheBust}`).then((res) => {
+      if (!res.ok) throw new Error(`properties.json ${res.status}`);
+      return res.json();
+    }),
+    fetch(`data/news.json${cacheBust}`).then((res) => res.ok ? res.json() : []),
+    fetch(`data/scrape-diagnostics.json${cacheBust}`).then((res) => res.ok ? res.json() : null).catch(() => null)
   ]);
 
-  state.properties = properties;
-  state.news = news;
-  state.dataMode = "local-json";
+  state.properties = Array.isArray(properties) ? properties : [];
+  state.news = Array.isArray(news) ? news : [];
+  state.diagnostics = diagnostics;
+
+  const generatedAt = diagnostics?.generatedAt ? new Date(diagnostics.generatedAt).toLocaleString("ja-JP") : "未取得";
+  const realCount = state.properties.filter((item) => !item.tags?.includes("検索導線")).length;
+  const sourceCount = state.properties.length - realCount;
+
+  setDataStatus(
+    "local",
+    "GitHub Actions取得データ表示中",
+    `最終取得: ${generatedAt} / 実取得候補 ${realCount}件 / 検索導線 ${sourceCount}件。条件変更後は「この条件で再検索」を押してください。`
+  );
 
   render();
   renderNews();
-}
-
-function buildApiUrl(apiEndpoint) {
-  const filter = getFilterValues();
-  const url = new URL(`${apiEndpoint}/search`);
-  url.searchParams.set("area", filter.area);
-  url.searchParams.set("layout", String(filter.layout));
-  url.searchParams.set("rent", String(filter.rent));
-  url.searchParams.set("walk", String(filter.walk));
-  url.searchParams.set("type", filter.type);
-  url.searchParams.set("priority", filter.priority);
-  url.searchParams.set("ts", String(Date.now()));
-  return url;
 }
 
 function setDataStatus(mode, title, message) {
@@ -151,7 +121,7 @@ function markDirty() {
   state.isDirty = true;
   const hint = qs("#filterHint");
   if (hint) hint.textContent = "条件が変更されています。結果を更新するには「この条件で再検索」を押してください。";
-  setDataStatus("dirty", "条件が変更されています", "新しい条件で検索するには「この条件で再検索」を押してください。現在表示中の結果は前回検索分です。");
+  setDataStatus("dirty", "条件が変更されています", "現在表示中のデータから、新しい条件で絞り込み直します。「この条件で再検索」を押してください。");
 }
 
 function markClean() {
@@ -164,7 +134,7 @@ function setSearchButtonsLoading(isLoading) {
   [qs("#searchButton"), qs("#searchButtonTop")].forEach((button) => {
     if (!button) return;
     button.disabled = isLoading;
-    button.textContent = isLoading ? "検索中..." : "この条件で再検索";
+    button.textContent = isLoading ? "表示更新中..." : "この条件で再検索";
   });
 }
 
@@ -174,9 +144,9 @@ function scrollToPropertyList() {
 
 function isAreaMatch(item, areaFilter) {
   if (areaFilter === "all") return true;
-  if (areaFilter === "fukuoka_city") return item.areaGroup === "fukuoka_city";
+  if (areaFilter === "fukuoka_city") return item.areaGroup === "fukuoka_city" || item.area === "福岡市全域";
   if (areaFilter === "preferred_wards") {
-    return ["福岡市西区", "福岡市早良区", "福岡市城南区"].includes(item.area);
+    return ["福岡市西区", "福岡市早良区", "福岡市城南区", "福岡市全域"].includes(item.area);
   }
   if (areaFilter === "surrounding") return item.areaGroup === "surrounding";
   return true;
@@ -184,7 +154,7 @@ function isAreaMatch(item, areaFilter) {
 
 function isTypeMatch(item, typeFilter) {
   if (typeFilter === "all") return true;
-  if (typeFilter === "public") return item.tags.includes("公的") || item.tags.includes("行政") || item.type === "ur";
+  if (typeFilter === "public") return item.tags.includes("公的") || item.tags.includes("行政") || item.tags.includes("公的・行政") || item.type === "ur" || item.type === "safety";
   if (typeFilter === "ur") return item.type === "ur";
   if (typeFilter === "safety") return item.type === "safety";
   if (typeFilter === "private") return item.type === "private";
@@ -192,25 +162,26 @@ function isTypeMatch(item, typeFilter) {
 }
 
 function calcScore(item, filter) {
-  let score = AREA_PRIORITY[item.area] || 40;
+  let score = AREA_PRIORITY[item.area] || item.score || 45;
 
-  if (item.tags.includes("公的")) score += 18;
-  if (item.tags.includes("行政")) score += 18;
   if (item.tags.includes("UR")) score += 16;
-  if (item.tags.includes("高齢者相談")) score += 12;
-  if (item.tags.includes("保証人不要") || item.tags.includes("保証会社")) score += 10;
-  if (item.layoutMin <= filter.layout) score += 8;
-  if (item.rentHint <= filter.rent) score += 8;
-  if (item.walkHint <= filter.walk) score += 8;
+  if (item.tags.includes("公的")) score += 14;
+  if (item.tags.includes("行政") || item.tags.includes("公的・行政")) score += 12;
+  if (item.tags.includes("高齢者相談")) score += 10;
+  if (item.tags.includes("保証人不要")) score += 10;
+  if (item.tags.includes("検索導線")) score -= 20;
+  if (item.imageLabel === "取得画像") score += 5;
+  if (!item.flexibleRent && item.rentHint <= filter.rent) score += 8;
+  if (!item.flexibleWalk && item.walkHint <= filter.walk) score += 8;
 
   if (filter.priority === "unemployed") {
     if (item.tags.includes("保証人不要")) score += 18;
     if (item.tags.includes("高齢者相談")) score += 14;
-    if (item.tags.includes("行政")) score += 12;
+    if (item.tags.includes("行政") || item.tags.includes("公的・行政")) score += 12;
   }
 
   if (filter.priority === "publicFirst") {
-    if (item.tags.includes("公的")) score += 22;
+    if (item.tags.includes("公的") || item.tags.includes("公的・行政")) score += 22;
     if (item.tags.includes("UR")) score += 18;
     if (item.tags.includes("行政")) score += 18;
   }
@@ -220,37 +191,27 @@ function calcScore(item, filter) {
     if (item.area.includes("中央区") || item.area.includes("博多区")) score += 8;
   }
 
-  return Math.min(score, 100);
-}
-
-function isApiSearchResultMode() {
-  return state.dataMode && state.dataMode !== "local-json";
+  return Math.max(1, Math.min(score, 100));
 }
 
 function filterProperties() {
   const filter = getFilterValues();
 
-  const withScores = state.properties
-    .map((item) => ({ ...item, score: typeof item.score === "number" ? item.score : calcScore(item, filter) }))
-    .sort((a, b) => b.score - a.score);
-
-  if (isApiSearchResultMode()) {
-    return withScores.slice(0, 10);
-  }
-
-  return withScores
+  return state.properties
     .filter((item) => isAreaMatch(item, filter.area))
     .filter((item) => isTypeMatch(item, filter.type))
-    .filter((item) => item.layoutMin <= filter.layout)
-    .filter((item) => item.rentHint <= filter.rent || item.flexibleRent)
-    .filter((item) => item.walkHint <= filter.walk || item.flexibleWalk)
+    .filter((item) => item.layoutMin <= filter.layout || item.tags?.includes("検索導線"))
+    .filter((item) => item.rentHint <= filter.rent || item.flexibleRent || item.tags?.includes("検索導線"))
+    .filter((item) => item.walkHint <= filter.walk || item.flexibleWalk || item.tags?.includes("検索導線") || filter.walk >= 999)
+    .map((item) => ({ ...item, score: calcScore(item, filter) }))
+    .sort((a, b) => b.score - a.score)
     .slice(0, 10);
 }
 
 function badgeClass(tag) {
-  if (["公的", "行政", "UR"].includes(tag)) return "green";
-  if (["家賃要確認", "条件要確認", "代表画像"].includes(tag)) return "orange";
-  if (["初期費用高め"].includes(tag)) return "red";
+  if (["公的", "行政", "UR", "公的・行政", "UR自動取得"].includes(tag)) return "green";
+  if (["家賃要確認", "条件要確認", "代表画像", "検索導線"].includes(tag)) return "orange";
+  if (["取得失敗", "初期費用高め"].includes(tag)) return "red";
   return "";
 }
 
@@ -259,7 +220,7 @@ function render() {
   const items = filterProperties();
 
   qs("#matchCount").textContent = items.length;
-  qs("#publicCount").textContent = items.filter((item) => item.tags.includes("公的") || item.tags.includes("行政") || item.tags.includes("UR")).length;
+  qs("#publicCount").textContent = items.filter((item) => item.tags.includes("公的") || item.tags.includes("行政") || item.tags.includes("公的・行政") || item.tags.includes("UR")).length;
   qs("#topArea").textContent = items[0]?.area || "-";
 
   if (!items.length) {
@@ -269,7 +230,8 @@ function render() {
 
   cards.innerHTML = items.map((item, index) => {
     const imageUrl = item.imageUrl || FALLBACK_IMAGE;
-    const imageLabel = item.imageLabel || "代表画像";
+    const imageLabel = item.imageLabel || (item.tags.includes("検索導線") ? "検索導線" : "代表画像");
+    const isSourceLink = item.tags.includes("検索導線");
 
     return `
       <article class="property-card ${index === 0 ? "top-pick" : ""}">
@@ -297,7 +259,7 @@ function render() {
           </div>
           <p class="note">${escapeHtml(item.note)}</p>
           <div class="card-actions">
-            <a class="open-link" href="${escapeAttr(item.url)}" target="_blank" rel="noopener">公式/検索ページを開く</a>
+            <a class="open-link" href="${escapeAttr(item.url)}" target="_blank" rel="noopener">${isSourceLink ? "公式検索を開く" : "物件/検索ページを開く"}</a>
             ${item.subUrl ? `<a class="sub-link" href="${escapeAttr(item.subUrl)}" target="_blank" rel="noopener">補助・制度を見る</a>` : ""}
           </div>
         </div>
@@ -349,8 +311,4 @@ qs("#resetButton").addEventListener("click", async () => {
   await runSearch({ scrollToResults: true });
 });
 
-loadData().catch((error) => {
-  console.error(error);
-  setDataStatus("error", "データの読み込みに失敗しました", "GitHub Pages上で開くか、ファイル構成を確認してください。");
-  qs("#cards").innerHTML = `<div class="empty">データの読み込みに失敗しました。GitHub Pages上で開くか、ローカルサーバー経由で確認してください。</div>`;
-});
+loadData();
