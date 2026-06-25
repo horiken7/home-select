@@ -223,17 +223,27 @@ function calcScore(item, filter) {
   return Math.min(score, 100);
 }
 
+function isApiSearchResultMode() {
+  return state.dataMode && state.dataMode !== "local-json";
+}
+
 function filterProperties() {
   const filter = getFilterValues();
 
-  return state.properties
+  const withScores = state.properties
+    .map((item) => ({ ...item, score: typeof item.score === "number" ? item.score : calcScore(item, filter) }))
+    .sort((a, b) => b.score - a.score);
+
+  if (isApiSearchResultMode()) {
+    return withScores.slice(0, 10);
+  }
+
+  return withScores
     .filter((item) => isAreaMatch(item, filter.area))
     .filter((item) => isTypeMatch(item, filter.type))
     .filter((item) => item.layoutMin <= filter.layout)
     .filter((item) => item.rentHint <= filter.rent || item.flexibleRent)
     .filter((item) => item.walkHint <= filter.walk || item.flexibleWalk)
-    .map((item) => ({ ...item, score: typeof item.score === "number" ? item.score : calcScore(item, filter) }))
-    .sort((a, b) => b.score - a.score)
     .slice(0, 10);
 }
 
