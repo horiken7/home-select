@@ -12,14 +12,20 @@
 - 対象エリア：福岡市全域、南区含む、福岡市周辺市町村
 - 現時点では「サービス付き高齢者向け住宅（サ高住）」は対象外
 
-## 第3版の更新
+## 第4版の更新
 
-- `config.js` を追加
-- Cloudflare Workers APIを後から接続できる構成に変更
-- API未設定時は `data/properties.json` と `data/news.json` を表示
-- API設定時は `/search` エンドポイントから物件・ニュースを取得
-- 画面上に「ローカルJSON / API接続中 / API取得失敗」の状態表示を追加
-- `workers/property-search-worker.js` に検索APIの雛形を追加
+- Cloudflare Workers側に Google Programmable Search API 接続処理を追加
+- WorkersのSecretとして `GOOGLE_API_KEY` と `GOOGLE_CSE_ID` を使う設計に変更
+- `/search` で以下の対象ソースをGoogle検索し、結果を物件カード形式へ整形
+  - UR都市機構
+  - セーフティネット住宅
+  - 福岡市・福岡県の居住支援、補助制度ページ
+  - LIFULL HOME'S
+  - SUUMO
+  - アットホーム
+  - CHINTAI
+- サ高住、老人ホーム、介護施設、有料老人ホーム系ワードは除外
+- 検索結果から `pagemap.cse_thumbnail` / `cse_image` / `og:image` が取れる場合は物件画像として表示
 
 ## ファイル構成
 
@@ -36,15 +42,39 @@
    └─ property-search-worker.js
 ```
 
-## Cloudflare Workers 接続手順
+## Google Programmable Search API 接続手順
 
-### 1. Workersを作成
+### 1. Google側で取得するもの
 
-Cloudflare Dashboardで新しいWorkersを作成し、`workers/property-search-worker.js` の内容を貼り付けてデプロイします。
+以下の2つが必要です。
 
-### 2. 動作確認
+```text
+GOOGLE_API_KEY
+GOOGLE_CSE_ID
+```
 
-WorkersのURLが以下のような場合、
+注意：Google公式ドキュメントでは、Custom Search JSON APIが新規顧客向けには閉じられている旨が案内されています。既に有効化できるGoogle Cloudアカウントで進める前提です。
+
+### 2. Cloudflare WorkersへSecret登録
+
+Cloudflare Workersの対象Workerで、以下のSecretを登録します。
+
+```text
+GOOGLE_API_KEY = Google Custom Search API Key
+GOOGLE_CSE_ID = Programmable Search Engine ID
+```
+
+### 3. Workersにコードを貼り付け
+
+Cloudflare Workersのエディタに、以下のファイル内容を貼り付けてデプロイします。
+
+```text
+workers/property-search-worker.js
+```
+
+### 4. Workersの動作確認
+
+WorkersのURLが以下の場合、
 
 ```text
 https://home-select-search.example.workers.dev
@@ -57,7 +87,9 @@ https://home-select-search.example.workers.dev/health
 https://home-select-search.example.workers.dev/search?area=all&layout=2&rent=10&walk=15&type=all&priority=balanced
 ```
 
-### 3. `config.js` を更新
+`/health` の `googleApiConfigured` が `true` なら、Secret設定は成功です。
+
+### 5. `config.js` を更新
 
 `config.js` の `apiEndpoint` にWorkers URLを入れます。
 
@@ -67,14 +99,15 @@ window.HOME_SELECT_CONFIG = {
 };
 ```
 
-### 4. GitHub Pagesで確認
+### 6. GitHub Pagesで確認
 
 サイト上部のステータスが「Cloudflare Workers API接続中」になれば接続成功です。
 
 ## 今後の予定
 
-1. Cloudflare Workersを実際に公開
-2. WorkersからUR・行政情報・検索APIを取得
-3. 取得できる物件画像URLをカードに表示
-4. 条件一致度スコアで上位10件を毎日表示
-5. 新着物件や行政支援ニュースの通知機能を追加
+1. Google API Key と Search Engine ID を取得
+2. Cloudflare WorkersにSecret登録
+3. Workersをデプロイ
+4. `config.js` にWorkers URLを設定
+5. 実検索結果の精度を確認し、検索クエリを調整
+6. 必要に応じて SerpAPI / Bing / Vertex AI Search への切替も検討
