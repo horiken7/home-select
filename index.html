@@ -101,7 +101,6 @@
             <option value="public">UR・公的・行政系</option>
             <option value="ur">UR賃貸</option>
             <option value="safety">セーフティネット・居住支援</option>
-            <option value="senior">高齢者向け住宅</option>
             <option value="private">一般賃貸</option>
           </select>
         </label>
@@ -137,10 +136,10 @@
       <div class="section-title">
         <div>
           <p class="section-kicker">Rental Candidates</p>
-          <h2>🏘️ 条件に近い候補・検索導線</h2>
+          <h2>🏘️ 条件に近い候補・画像付き検索導線</h2>
           <p class="muted">
-            第1版は、物件サイトの規約に配慮して「公式検索リンク・行政系リンク」を中心に表示します。
-            実データ取得は第2版でCloudflare Workers等へ接続予定です。
+            サ高住は除外し、UR・公的賃貸・行政斡旋・一般賃貸を中心に表示します。
+            現段階の画像は代表イメージです。実検索接続後は取得元の物件画像を表示します。
           </p>
         </div>
         <span class="updated">条件初期値：2LDK以上 / 管込10万円 / 徒歩15分</span>
@@ -173,8 +172,8 @@
       <div class="roadmap-grid">
         <article>
           <strong>Step 1</strong>
-          <h3>GitHub Pages公開</h3>
-          <p>この静的サイトをGitHub Pagesで公開し、URLから見られる状態にします。</p>
+          <h3>画像付き候補表示</h3>
+          <p>検索結果カードに画像枠を追加。実データ接続後は物件画像URLを自動表示します。</p>
         </article>
         <article>
           <strong>Step 2</strong>
