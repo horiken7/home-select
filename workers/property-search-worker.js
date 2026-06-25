@@ -1,9 +1,10 @@
-// Cloudflare Workers API scaffold for home-select
+// Cloudflare Workers API for home-select
 //
-// Purpose:
-// - Provide a future API endpoint for GitHub Pages frontend.
-// - Return normalized properties and administrative news.
-// - Later replace mock data with real search/API results.
+// Google Programmable Search API connector version.
+//
+// Required Cloudflare Workers secrets:
+// - GOOGLE_API_KEY
+// - GOOGLE_CSE_ID
 //
 // Routes:
 // - GET /health
@@ -15,6 +16,7 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type"
 };
 
+const GOOGLE_SEARCH_ENDPOINT = "https://customsearch.googleapis.com/customsearch/v1";
 const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=900&q=75";
 
 const AREA_PRIORITY = {
@@ -36,6 +38,26 @@ const AREA_PRIORITY = {
   "太宰府市": 52,
   "宇美町": 50
 };
+
+const AREA_KEYWORDS = [
+  "福岡市西区",
+  "福岡市早良区",
+  "福岡市城南区",
+  "福岡市中央区",
+  "福岡市博多区",
+  "福岡市東区",
+  "福岡市南区",
+  "糸島市",
+  "春日市",
+  "大野城市",
+  "那珂川市",
+  "古賀市",
+  "新宮町",
+  "粕屋町",
+  "志免町",
+  "太宰府市",
+  "宇美町"
+];
 
 const SEED_PROPERTIES = [
   {
@@ -79,48 +101,6 @@ const SEED_PROPERTIES = [
     subUrl: "https://www.city.fukuoka.lg.jp/",
     imageUrl: "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=900&q=75",
     imageLabel: "相談・支援"
-  },
-  {
-    title: "福岡市南区 一般賃貸検索",
-    subtitle: "南区も含めて予算内2LDKを広く比較",
-    area: "福岡市南区",
-    areaGroup: "fukuoka_city",
-    type: "private",
-    layoutMin: 2,
-    layoutLabel: "2LDK以上",
-    rentHint: 10,
-    rentLabel: "10万円以内を狙う",
-    walkHint: 15,
-    walkLabel: "15分以内",
-    flexibleRent: false,
-    flexibleWalk: false,
-    tags: ["一般賃貸", "保証会社", "2LDK以上", "代表画像"],
-    note: "南区は福岡市内で候補を増やすうえで重要です。駅徒歩と坂道の確認がポイントです。",
-    url: "https://www.homes.co.jp/chintai/fukuoka/fukuoka_minami-city/",
-    subUrl: "https://www.city.fukuoka.lg.jp/",
-    imageUrl: "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=75",
-    imageLabel: "代表画像"
-  }
-];
-
-const ADMIN_NEWS = [
-  {
-    source: "福岡市",
-    title: "福岡市居住支援協議会・住まいサポートふくおか",
-    summary: "高齢者など、民間賃貸住宅への入居に不安がある人向けの住み替え相談先として最優先で確認します。",
-    url: "https://www.city.fukuoka.lg.jp/jutaku-toshi/jigyochosei/life/kyojuushienkyougikai.html"
-  },
-  {
-    source: "福岡市",
-    title: "居住サポート住宅の認定制度",
-    summary: "住宅確保要配慮者向けの居住支援、家賃債務保証料等の低廉化、引っ越し費用・初期費用などの情報を確認します。",
-    url: "https://www.city.fukuoka.lg.jp/jutaku-toshi/jigyochosei/life/kyojusupportnintei.html"
-  },
-  {
-    source: "UR都市機構",
-    title: "UR賃貸住宅 福岡県エリア検索",
-    summary: "福岡市と周辺市町村のUR賃貸を探す入口。保証人不要など、定年後の住み替えで比較しやすい候補です。",
-    url: "https://www.ur-net.go.jp/chintai/kyushu/fukuoka/area/"
   }
 ];
 
@@ -133,43 +113,366 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/health") {
-      return json({ ok: true, service: "home-select-search", now: new Date().toISOString() });
+      return json({
+        ok: true,
+        service: "home-select-search",
+        googleApiConfigured: Boolean(env.GOOGLE_API_KEY && env.GOOGLE_CSE_ID),
+        now: new Date().toISOString()
+      });
     }
 
     if (url.pathname === "/search" || url.pathname === "/") {
       const filters = parseFilters(url.searchParams);
 
-      // Later implementation plan:
-      // 1. Fetch UR and public housing/search pages where permitted.
-      // 2. Use an official/search API for private rental candidates if available.
-      // 3. Normalize records to the same shape as SEED_PROPERTIES.
-      // 4. Keep only items with valid links and, where available, imageUrl.
-      const properties = SEED_PROPERTIES
-        .filter((item) => item.type !== "senior")
-        .filter((item) => isAreaMatch(item, filters.area))
-        .filter((item) => isTypeMatch(item, filters.type))
-        .filter((item) => item.layoutMin <= filters.layout)
-        .filter((item) => item.rentHint <= filters.rent || item.flexibleRent)
-        .filter((item) => item.walkHint <= filters.walk || item.flexibleWalk)
-        .map((item) => ({ ...item, imageUrl: item.imageUrl || DEFAULT_IMAGE, score: calcScore(item, filters) }))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 10);
+      const cacheKey = new Request(url.toString(), request);
+      const cached = await caches.default.match(cacheKey);
+      if (cached) return cached;
 
-      return json({
-        meta: {
-          mode: "worker-seed",
-          message: "Cloudflare Workers API scaffold is active. Real search connectors are not enabled yet.",
-          generatedAt: new Date().toISOString(),
-          filters
-        },
-        properties,
-        news: ADMIN_NEWS
-      });
+      let result;
+
+      if (!env.GOOGLE_API_KEY || !env.GOOGLE_CSE_ID) {
+        result = buildSeedResponse(filters, "missing-google-secrets", "Google API Key または Search Engine ID が未設定です。WorkersのSecret設定後に実検索へ切り替わります。");
+      } else {
+        result = await buildGoogleSearchResponse(env, filters);
+      }
+
+      const response = json(result);
+      ctx.waitUntil(caches.default.put(cacheKey, response.clone()));
+      return response;
     }
 
     return json({ ok: false, error: "Not found" }, 404);
   }
 };
+
+async function buildGoogleSearchResponse(env, filters) {
+  const errors = [];
+  const propertyQueries = buildPropertyQueries(filters);
+  const newsQuery = buildNewsQuery();
+
+  const propertyResults = [];
+
+  for (const queryInfo of propertyQueries) {
+    try {
+      const items = await googleSearch(env, queryInfo.query, 5);
+      for (const item of items) {
+        const normalized = normalizeProperty(item, queryInfo, filters);
+        if (normalized) propertyResults.push(normalized);
+      }
+    } catch (error) {
+      errors.push(`${queryInfo.label}: ${error.message}`);
+    }
+  }
+
+  const news = [];
+  try {
+    const newsItems = await googleSearch(env, newsQuery, 5);
+    for (const item of newsItems) {
+      const normalized = normalizeNews(item);
+      if (normalized) news.push(normalized);
+    }
+  } catch (error) {
+    errors.push(`administrative-news: ${error.message}`);
+  }
+
+  const dedupedProperties = dedupeByUrl(propertyResults)
+    .filter((item) => item.type !== "senior")
+    .filter((item) => isAreaMatch(item, filters.area))
+    .filter((item) => isTypeMatch(item, filters.type))
+    .filter((item) => item.layoutMin <= filters.layout)
+    .filter((item) => item.rentHint <= filters.rent || item.flexibleRent)
+    .filter((item) => item.walkHint <= filters.walk || item.flexibleWalk)
+    .map((item) => ({ ...item, score: calcScore(item, filters) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10);
+
+  if (!dedupedProperties.length) {
+    const fallback = buildSeedResponse(filters, "google-api-no-results", "Google APIには接続しましたが、条件に合う候補が十分に取れなかったため、補助候補を表示します。");
+    fallback.meta.errors = errors;
+    return fallback;
+  }
+
+  return {
+    meta: {
+      mode: "google-api",
+      message: "Google Programmable Search APIから対象ソースの検索結果を取得しています。",
+      generatedAt: new Date().toISOString(),
+      filters,
+      queryCount: propertyQueries.length + 1,
+      errors
+    },
+    properties: dedupedProperties,
+    news: news.length ? dedupeByUrl(news).slice(0, 6) : buildDefaultNews()
+  };
+}
+
+function buildSeedResponse(filters, mode, message) {
+  const properties = SEED_PROPERTIES
+    .filter((item) => item.type !== "senior")
+    .filter((item) => isAreaMatch(item, filters.area))
+    .filter((item) => isTypeMatch(item, filters.type))
+    .filter((item) => item.layoutMin <= filters.layout)
+    .filter((item) => item.rentHint <= filters.rent || item.flexibleRent)
+    .filter((item) => item.walkHint <= filters.walk || item.flexibleWalk)
+    .map((item) => ({ ...item, imageUrl: item.imageUrl || DEFAULT_IMAGE, score: calcScore(item, filters) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10);
+
+  return {
+    meta: {
+      mode,
+      message,
+      generatedAt: new Date().toISOString(),
+      filters
+    },
+    properties,
+    news: buildDefaultNews()
+  };
+}
+
+function buildPropertyQueries(filters) {
+  const areaTerms = areaTermsFromFilter(filters.area);
+  const baseTerms = `${areaTerms} 2LDK 賃貸 管理費込み ${filters.rent}万円以内 徒歩${filters.walk}分以内 -サ高住 -サービス付き高齢者向け住宅`;
+
+  const queries = [];
+
+  if (["all", "public", "ur"].includes(filters.type)) {
+    queries.push({
+      label: "UR賃貸",
+      type: "ur",
+      source: "UR都市機構",
+      query: `site:ur-net.go.jp/chintai ${baseTerms} UR 賃貸`
+    });
+  }
+
+  if (["all", "public", "safety"].includes(filters.type)) {
+    queries.push({
+      label: "セーフティネット・居住支援",
+      type: "safety",
+      source: "行政・居住支援",
+      query: `(site:safetynet-jutaku.jp OR site:city.fukuoka.lg.jp OR site:pref.fukuoka.lg.jp) ${areaTerms} 賃貸 住宅 居住支援 高齢者 2LDK -サ高住`
+    });
+  }
+
+  if (["all", "private"].includes(filters.type)) {
+    queries.push({
+      label: "一般賃貸",
+      type: "private",
+      source: "一般賃貸検索",
+      query: `(site:homes.co.jp OR site:suumo.jp OR site:athome.co.jp OR site:chintai.net) ${baseTerms}`
+    });
+  }
+
+  return queries;
+}
+
+function buildNewsQuery() {
+  return `(site:city.fukuoka.lg.jp OR site:pref.fukuoka.lg.jp OR site:mlit.go.jp OR site:safetynet-jutaku.jp) 福岡 高齢者 賃貸 補助 居住支援 家賃 住宅`;
+}
+
+function areaTermsFromFilter(areaFilter) {
+  if (areaFilter === "preferred_wards") return "福岡市西区 OR 福岡市早良区 OR 福岡市城南区";
+  if (areaFilter === "fukuoka_city") return "福岡市 西区 早良区 城南区 中央区 博多区 東区 南区";
+  if (areaFilter === "surrounding") return "糸島市 春日市 大野城市 那珂川市 古賀市 新宮町 粕屋町 志免町 太宰府市 宇美町";
+  return "福岡市 西区 早良区 城南区 中央区 博多区 東区 南区 糸島市 春日市 大野城市 那珂川市 古賀市 新宮町 粕屋町 志免町 太宰府市 宇美町";
+}
+
+async function googleSearch(env, query, num = 5) {
+  const url = new URL(GOOGLE_SEARCH_ENDPOINT);
+  url.searchParams.set("key", env.GOOGLE_API_KEY);
+  url.searchParams.set("cx", env.GOOGLE_CSE_ID);
+  url.searchParams.set("q", query);
+  url.searchParams.set("num", String(Math.min(Math.max(num, 1), 10)));
+  url.searchParams.set("lr", "lang_ja");
+  url.searchParams.set("gl", "jp");
+  url.searchParams.set("safe", "active");
+
+  const res = await fetch(url.toString(), {
+    headers: { "Accept": "application/json" }
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Google API ${res.status}: ${body.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  return Array.isArray(data.items) ? data.items : [];
+}
+
+function normalizeProperty(item, queryInfo, filters) {
+  const title = clean(item.title);
+  const snippet = clean(item.snippet || "");
+  const url = item.link;
+  const text = `${title} ${snippet} ${url}`;
+
+  if (!url || isExcluded(text)) return null;
+  if (!looksLikeRental(text, queryInfo.type)) return null;
+
+  const area = detectArea(text);
+  const layout = extractLayout(text, filters.layout);
+  const rent = extractRent(text, filters.rent);
+  const walk = extractWalk(text, filters.walk);
+  const imageUrl = extractImage(item);
+  const source = detectSource(url, queryInfo.source);
+
+  const tags = buildTags(queryInfo.type, source, text, imageUrl);
+
+  return {
+    title,
+    subtitle: snippet || source,
+    area,
+    areaGroup: area.startsWith("福岡市") ? "fukuoka_city" : "surrounding",
+    type: queryInfo.type,
+    source,
+    layoutMin: layout.min,
+    layoutLabel: layout.label,
+    rentHint: rent.value,
+    rentLabel: rent.label,
+    walkHint: walk.value,
+    walkLabel: walk.label,
+    flexibleRent: rent.flexible,
+    flexibleWalk: walk.flexible,
+    tags,
+    note: buildNote(queryInfo.type, source, text),
+    url,
+    subUrl: source.includes("UR") ? "https://www.ur-net.go.jp/chintai/about/" : "https://www.city.fukuoka.lg.jp/",
+    imageUrl: imageUrl || DEFAULT_IMAGE,
+    imageLabel: imageUrl ? "取得画像" : "代表画像"
+  };
+}
+
+function normalizeNews(item) {
+  const title = clean(item.title);
+  const summary = clean(item.snippet || "");
+  const url = item.link;
+  if (!url || !title) return null;
+  return {
+    source: detectSource(url, "行政・住宅支援"),
+    title,
+    summary,
+    url
+  };
+}
+
+function clean(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function isExcluded(text) {
+  return /サ高住|サービス付き高齢者向け住宅|老人ホーム|介護施設|有料老人/.test(text);
+}
+
+function looksLikeRental(text, type) {
+  if (type === "safety") return /賃貸|住宅|居住支援|セーフティネット|入居/.test(text);
+  return /賃貸|マンション|アパート|UR|物件|住宅/.test(text);
+}
+
+function detectArea(text) {
+  const found = AREA_KEYWORDS.find((area) => text.includes(area));
+  if (found) return found;
+  if (/姪浜|今宿|九大学研都市|周船寺|橋本/.test(text)) return "福岡市西区";
+  if (/西新|藤崎|室見|百道|野芥/.test(text)) return "福岡市早良区";
+  if (/別府|七隈|茶山|金山|福大前/.test(text)) return "福岡市城南区";
+  if (/天神|薬院|六本松|大濠|唐人町/.test(text)) return "福岡市中央区";
+  if (/博多|吉塚|竹下|東比恵/.test(text)) return "福岡市博多区";
+  if (/香椎|千早|箱崎|和白/.test(text)) return "福岡市東区";
+  if (/大橋|高宮|井尻|平尾/.test(text)) return "福岡市南区";
+  return "福岡市西区";
+}
+
+function extractLayout(text, defaultLayout) {
+  const match = text.match(/([1-5])\s?LDK|([1-5])\s?DK/i);
+  if (!match) return { min: defaultLayout, label: `${defaultLayout}LDK以上 / 要確認` };
+  const value = Number(match[1] || match[2] || defaultLayout);
+  return { min: value, label: `${value}${match[1] ? "LDK" : "DK"}` };
+}
+
+function extractRent(text, defaultRent) {
+  const matches = [...text.matchAll(/(\d+(?:\.\d+)?)\s?万円/g)].map((m) => Number(m[1])).filter(Boolean);
+  if (!matches.length) return { value: defaultRent, label: `${defaultRent}万円以内 / 要確認`, flexible: true };
+  const value = Math.min(...matches);
+  return { value, label: `${value}万円目安`, flexible: false };
+}
+
+function extractWalk(text, defaultWalk) {
+  const match = text.match(/徒歩\s?(\d+)\s?分/);
+  if (!match) return { value: defaultWalk, label: `徒歩${defaultWalk}分以内 / 要確認`, flexible: true };
+  const value = Number(match[1]);
+  return { value, label: `徒歩${value}分` , flexible: false };
+}
+
+function extractImage(item) {
+  const pagemap = item.pagemap || {};
+  const thumb = pagemap.cse_thumbnail?.[0]?.src;
+  const cseImage = pagemap.cse_image?.[0]?.src;
+  const ogImage = pagemap.metatags?.[0]?.["og:image"];
+  return thumb || cseImage || ogImage || "";
+}
+
+function detectSource(url, fallback) {
+  if (url.includes("ur-net.go.jp")) return "UR都市機構";
+  if (url.includes("city.fukuoka.lg.jp")) return "福岡市";
+  if (url.includes("pref.fukuoka.lg.jp")) return "福岡県";
+  if (url.includes("safetynet-jutaku.jp")) return "セーフティネット住宅";
+  if (url.includes("homes.co.jp")) return "LIFULL HOME'S";
+  if (url.includes("suumo.jp")) return "SUUMO";
+  if (url.includes("athome.co.jp")) return "アットホーム";
+  if (url.includes("chintai.net")) return "CHINTAI";
+  if (url.includes("mlit.go.jp")) return "国土交通省";
+  return fallback;
+}
+
+function buildTags(type, source, text, imageUrl) {
+  const tags = [];
+  if (type === "ur" || source.includes("UR")) tags.push("UR", "公的");
+  if (type === "safety") tags.push("行政", "高齢者相談");
+  if (type === "private") tags.push("一般賃貸");
+  if (/保証人不要/.test(text)) tags.push("保証人不要");
+  if (/保証会社/.test(text)) tags.push("保証会社");
+  if (/2LDK|3LDK|4LDK/.test(text)) tags.push("2LDK以上");
+  tags.push(imageUrl ? "取得画像" : "代表画像");
+  return [...new Set(tags)];
+}
+
+function buildNote(type, source, text) {
+  if (type === "ur") return "Google検索結果から取得したUR関連候補です。実際の空室・家賃・入居条件はリンク先で確認してください。";
+  if (type === "safety") return "行政・居住支援系の検索結果です。無職・年金見込み・保証人不安がある場合に優先確認してください。";
+  return `${source}の検索結果です。空室、管理費込み家賃、審査条件、画像利用可否はリンク先で確認してください。`;
+}
+
+function dedupeByUrl(items) {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = item.url;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function buildDefaultNews() {
+  return [
+    {
+      source: "福岡市",
+      title: "福岡市居住支援協議会・住まいサポートふくおか",
+      summary: "高齢者など、民間賃貸住宅への入居に不安がある人向けの住み替え相談先として最優先で確認します。",
+      url: "https://www.city.fukuoka.lg.jp/jutaku-toshi/jigyochosei/life/kyojuushienkyougikai.html"
+    },
+    {
+      source: "福岡市",
+      title: "居住サポート住宅の認定制度",
+      summary: "住宅確保要配慮者向けの居住支援、家賃債務保証料等の低廉化、引っ越し費用・初期費用などの情報を確認します。",
+      url: "https://www.city.fukuoka.lg.jp/jutaku-toshi/jigyochosei/life/kyojusupportnintei.html"
+    },
+    {
+      source: "UR都市機構",
+      title: "UR賃貸住宅 福岡県エリア検索",
+      summary: "福岡市と周辺市町村のUR賃貸を探す入口。保証人不要など、定年後の住み替えで比較しやすい候補です。",
+      url: "https://www.ur-net.go.jp/chintai/kyushu/fukuoka/area/"
+    }
+  ];
+}
 
 function parseFilters(params) {
   return {
