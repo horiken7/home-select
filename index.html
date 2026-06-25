@@ -50,7 +50,10 @@
           <p class="section-kicker">Search Conditions</p>
           <h2>🔎 監視条件</h2>
         </div>
-        <button id="resetButton" class="ghost-button" type="button">初期条件に戻す</button>
+        <div class="search-actions-top">
+          <button id="searchButtonTop" class="search-button" type="button">この条件で再検索</button>
+          <button id="resetButton" class="ghost-button" type="button">初期条件に戻す</button>
+        </div>
       </div>
 
       <div id="dataStatus" class="data-status" role="status">
@@ -124,6 +127,11 @@
         </label>
       </form>
 
+      <div class="search-commit-bar">
+        <p id="filterHint">条件を変更したら「この条件で再検索」を押してください。</p>
+        <button id="searchButton" class="search-button" type="button">この条件で再検索</button>
+      </div>
+
       <div class="summary-strip">
         <div>
           <span id="matchCount">0</span>
@@ -147,7 +155,7 @@
           <h2>🏘️ 条件に近い候補・画像付き検索導線</h2>
           <p class="muted">
             サ高住は除外し、UR・公的賃貸・行政斡旋・一般賃貸を中心に表示します。
-            現段階の画像は代表イメージです。実検索接続後は取得元の物件画像を表示します。
+            実検索接続後は取得元の物件画像を表示します。
           </p>
         </div>
         <span class="updated">条件初期値：2LDK以上 / 管込10万円 / 徒歩15分</span>
