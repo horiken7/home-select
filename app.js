@@ -80,13 +80,14 @@ async function loadFromGeneratedJson() {
   state.diagnostics = diagnostics;
 
   const generatedAt = diagnostics?.generatedAt ? new Date(diagnostics.generatedAt).toLocaleString("ja-JP") : "未取得";
-  const realCount = state.properties.filter((item) => !item.tags?.includes("検索導線")).length;
+  const realCount = state.properties.filter((item) => item.matchStatus !== "source_link" && !item.tags?.includes("検索導線")).length;
   const sourceCount = state.properties.length - realCount;
+  const needsCheckCount = state.properties.filter((item) => item.matchStatus === "needs_check" || item.tags?.includes("条件要確認")).length;
 
   setDataStatus(
     "local",
     "GitHub Actions取得データ表示中",
-    `最終取得: ${generatedAt} / 実取得候補 ${realCount}件 / 検索導線 ${sourceCount}件。条件変更後は「この条件で再検索」を押してください。`
+    `最終取得: ${generatedAt} / 実取得候補 ${realCount}件 / 条件要確認 ${needsCheckCount}件 / 検索導線 ${sourceCount}件。条件変更後は「この条件で再検索」を押してください。`
   );
 
   render();
@@ -121,7 +122,7 @@ function markDirty() {
   state.isDirty = true;
   const hint = qs("#filterHint");
   if (hint) hint.textContent = "条件が変更されています。結果を更新するには「この条件で再検索」を押してください。";
-  setDataStatus("dirty", "条件が変更されています", "現在表示中のデータから、新しい条件で絞り込み直します。「この条件で再検索」を押してください。");
+  setDataStatus("dirty", "条件が変更されています", "現在表示中の取得データから、新しい条件で絞り込み直します。「この条件で再検索」を押してください。");
 }
 
 function markClean() {
@@ -161,6 +162,15 @@ function isTypeMatch(item, typeFilter) {
   return true;
 }
 
+function layoutMatches(item, minLayout) {
+  if (item.tags?.includes("検索導線") || item.matchStatus === "source_link") return true;
+  if (item.flexibleLayout || !Number.isFinite(Number(item.layoutRank)) || Number(item.layoutRank) <= 0) return true;
+  // 2LDK以上の初期条件では、2LDK・3DK以上を対象にする。2DK/2Kは除外。
+  if (minLayout === 2) return Number(item.layoutRank) >= 2;
+  // 3LDK以上では、3LDKまたは4DK以上相当を対象にする。
+  return Number(item.layoutRank) >= minLayout;
+}
+
 function calcScore(item, filter) {
   let score = AREA_PRIORITY[item.area] || item.score || 45;
 
@@ -169,7 +179,8 @@ function calcScore(item, filter) {
   if (item.tags.includes("行政") || item.tags.includes("公的・行政")) score += 12;
   if (item.tags.includes("高齢者相談")) score += 10;
   if (item.tags.includes("保証人不要")) score += 10;
-  if (item.tags.includes("検索導線")) score -= 20;
+  if (item.matchStatus === "needs_check" || item.tags.includes("条件要確認")) score -= 10;
+  if (item.tags.includes("検索導線") || item.matchStatus === "source_link") score -= 25;
   if (item.imageLabel === "取得画像") score += 5;
   if (!item.flexibleRent && item.rentHint <= filter.rent) score += 8;
   if (!item.flexibleWalk && item.walkHint <= filter.walk) score += 8;
@@ -187,85 +198,139 @@ function calcScore(item, filter) {
   }
 
   if (filter.priority === "access") {
-    if (item.walkHint <= 10) score += 18;
+    if (!item.flexibleWalk && item.walkHint <= 10) score += 18;
     if (item.area.includes("中央区") || item.area.includes("博多区")) score += 8;
   }
 
   return Math.max(1, Math.min(score, 100));
 }
 
-function filterProperties() {
-  const filter = getFilterValues();
+function passesStrictFilters(item, filter) {
+  if (!isAreaMatch(item, filter.area)) return false;
+  if (!isTypeMatch(item, filter.type)) return false;
+  if (!layoutMatches(item, filter.layout)) return false;
+  if (item.flexibleRent || item.rentHint > filter.rent) return false;
+  if (filter.walk < 999 && (item.flexibleWalk || item.walkHint > filter.walk)) return false;
+  return true;
+}
 
-  return state.properties
-    .filter((item) => isAreaMatch(item, filter.area))
-    .filter((item) => isTypeMatch(item, filter.type))
-    .filter((item) => item.layoutMin <= filter.layout || item.tags?.includes("検索導線"))
-    .filter((item) => item.rentHint <= filter.rent || item.flexibleRent || item.tags?.includes("検索導線"))
-    .filter((item) => item.walkHint <= filter.walk || item.flexibleWalk || item.tags?.includes("検索導線") || filter.walk >= 999)
+function passesNeedsCheckFilters(item, filter) {
+  if (!isAreaMatch(item, filter.area)) return false;
+  if (!isTypeMatch(item, filter.type)) return false;
+  if (!layoutMatches(item, filter.layout)) return false;
+  if (!item.flexibleRent && item.rentHint > filter.rent) return false;
+  if (filter.walk < 999 && !item.flexibleWalk && item.walkHint > filter.walk) return false;
+  return true;
+}
+
+function splitFilteredProperties() {
+  const filter = getFilterValues();
+  const scored = state.properties
     .map((item) => ({ ...item, score: calcScore(item, filter) }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 10);
+    .sort((a, b) => b.score - a.score);
+
+  const sourceLinks = scored
+    .filter((item) => item.matchStatus === "source_link" || item.tags?.includes("検索導線"))
+    .filter((item) => isAreaMatch(item, filter.area) && isTypeMatch(item, filter.type))
+    .slice(0, 8);
+
+  const realItems = scored.filter((item) => item.matchStatus !== "source_link" && !item.tags?.includes("検索導線"));
+  const matched = realItems
+    .filter((item) => item.matchStatus === "matched")
+    .filter((item) => passesStrictFilters(item, filter))
+    .slice(0, 12);
+
+  const needsCheck = realItems
+    .filter((item) => item.matchStatus !== "matched" || item.tags?.includes("条件要確認") || item.flexibleRent || item.flexibleWalk || item.flexibleLayout)
+    .filter((item) => passesNeedsCheckFilters(item, filter))
+    .slice(0, 8);
+
+  return { matched, needsCheck, sourceLinks, filter };
 }
 
 function badgeClass(tag) {
   if (["公的", "行政", "UR", "公的・行政", "UR自動取得"].includes(tag)) return "green";
-  if (["家賃要確認", "条件要確認", "代表画像", "検索導線"].includes(tag)) return "orange";
-  if (["取得失敗", "初期費用高め"].includes(tag)) return "red";
+  if (["家賃要確認", "条件要確認", "代表画像", "検索導線", "物件名要確認", "リンク要確認", "駅徒歩要確認", "間取り要確認", "画像要確認"].includes(tag)) return "orange";
+  if (["取得失敗", "初期費用高め", "条件外"].includes(tag)) return "red";
   return "";
 }
 
 function render() {
   const cards = qs("#cards");
-  const items = filterProperties();
+  const { matched, needsCheck, sourceLinks } = splitFilteredProperties();
+  const visible = [...matched, ...needsCheck, ...sourceLinks];
 
-  qs("#matchCount").textContent = items.length;
-  qs("#publicCount").textContent = items.filter((item) => item.tags.includes("公的") || item.tags.includes("行政") || item.tags.includes("公的・行政") || item.tags.includes("UR")).length;
-  qs("#topArea").textContent = items[0]?.area || "-";
+  qs("#matchCount").textContent = matched.length + needsCheck.length;
+  qs("#publicCount").textContent = visible.filter((item) => item.tags.includes("公的") || item.tags.includes("行政") || item.tags.includes("公的・行政") || item.tags.includes("UR")).length;
+  qs("#topArea").textContent = matched[0]?.area || needsCheck[0]?.area || sourceLinks[0]?.area || "-";
 
-  if (!items.length) {
+  if (!visible.length) {
     cards.innerHTML = `<div class="empty">条件に合う候補がありません。家賃上限または駅徒歩条件を少し広げてください。</div>`;
     return;
   }
 
-  cards.innerHTML = items.map((item, index) => {
-    const imageUrl = item.imageUrl || FALLBACK_IMAGE;
-    const imageLabel = item.imageLabel || (item.tags.includes("検索導線") ? "検索導線" : "代表画像");
-    const isSourceLink = item.tags.includes("検索導線");
+  cards.innerHTML = [
+    renderSection("✅ 条件に合う実取得物件", "家賃・間取り・駅徒歩・リンクを確認できた候補です。", matched, "条件に合う実取得物件はまだありません。"),
+    renderSection("⚠️ 条件要確認の候補", "物件情報の一部が未確定です。リンク先で家賃・徒歩・空室を確認してください。", needsCheck, "条件要確認の候補はありません。"),
+    renderSection("🔎 検索導線・行政支援リンク", "実物件カードではありません。公式検索や行政支援ページへの入口です。", sourceLinks, "検索導線はありません。")
+  ].join("");
+}
 
-    return `
-      <article class="property-card ${index === 0 ? "top-pick" : ""}">
-        <a class="property-image" href="${escapeAttr(item.url)}" target="_blank" rel="noopener" aria-label="${escapeAttr(item.title)}を開く">
-          <img src="${escapeAttr(imageUrl)}" alt="${escapeAttr(item.title)}の画像" loading="lazy" onerror="this.src='${FALLBACK_IMAGE}'" />
-          <span>${escapeHtml(imageLabel)}</span>
-        </a>
-
-        <div class="property-body">
-          <div class="card-head">
-            <div>
-              <h3>${escapeHtml(item.title)}</h3>
-              <p class="muted">${escapeHtml(item.subtitle)}</p>
-            </div>
-            <div class="score">${item.score}</div>
-          </div>
-          <div class="badges">
-            ${item.tags.map((tag) => `<span class="badge ${badgeClass(tag)}">${escapeHtml(tag)}</span>`).join("")}
-          </div>
-          <div class="specs">
-            <div class="spec"><span>エリア</span><strong>${escapeHtml(item.area)}</strong></div>
-            <div class="spec"><span>間取り目安</span><strong>${escapeHtml(item.layoutLabel)}</strong></div>
-            <div class="spec"><span>家賃目安</span><strong>${escapeHtml(item.rentLabel)}</strong></div>
-            <div class="spec"><span>駅徒歩目安</span><strong>${escapeHtml(item.walkLabel)}</strong></div>
-          </div>
-          <p class="note">${escapeHtml(item.note)}</p>
-          <div class="card-actions">
-            <a class="open-link" href="${escapeAttr(item.url)}" target="_blank" rel="noopener">${isSourceLink ? "公式検索を開く" : "物件/検索ページを開く"}</a>
-            ${item.subUrl ? `<a class="sub-link" href="${escapeAttr(item.subUrl)}" target="_blank" rel="noopener">補助・制度を見る</a>` : ""}
-          </div>
+function renderSection(title, description, items, emptyMessage) {
+  return `
+    <section class="result-section">
+      <div class="result-section-head">
+        <div>
+          <h3>${escapeHtml(title)} <span>${items.length}件</span></h3>
+          <p>${escapeHtml(description)}</p>
         </div>
-      </article>
-    `;
-  }).join("");
+      </div>
+      ${items.length ? `<div class="section-card-grid">${items.map(renderCard).join("")}</div>` : `<div class="empty small-empty">${escapeHtml(emptyMessage)}</div>`}
+    </section>
+  `;
+}
+
+function renderCard(item, index) {
+  const imageUrl = item.imageUrl || FALLBACK_IMAGE;
+  const imageLabel = item.imageLabel || (item.tags.includes("検索導線") ? "検索導線" : "代表画像");
+  const isSourceLink = item.matchStatus === "source_link" || item.tags.includes("検索導線");
+  const issues = Array.isArray(item.qualityIssues) ? item.qualityIssues : [];
+  const cardClass = `${index === 0 && item.matchStatus === "matched" ? "top-pick" : ""} ${isSourceLink ? "source-link-card" : ""} ${item.matchStatus === "needs_check" ? "needs-check-card" : ""}`;
+
+  return `
+    <article class="property-card ${cardClass}">
+      <a class="property-image" href="${escapeAttr(item.url)}" target="_blank" rel="noopener" aria-label="${escapeAttr(item.title)}を開く">
+        <img src="${escapeAttr(imageUrl)}" alt="${escapeAttr(item.title)}の画像" loading="lazy" onerror="this.src='${FALLBACK_IMAGE}'" />
+        <span>${escapeHtml(imageLabel)}</span>
+      </a>
+
+      <div class="property-body">
+        <div class="card-head">
+          <div>
+            <p class="status-label">${escapeHtml(item.matchStatusLabel || (isSourceLink ? "検索導線" : "取得候補"))}</p>
+            <h3>${escapeHtml(item.title)}</h3>
+            <p class="muted">${escapeHtml(item.subtitle)}</p>
+          </div>
+          <div class="score">${item.score}</div>
+        </div>
+        <div class="badges">
+          ${item.tags.map((tag) => `<span class="badge ${badgeClass(tag)}">${escapeHtml(tag)}</span>`).join("")}
+        </div>
+        <div class="specs">
+          <div class="spec"><span>エリア</span><strong>${escapeHtml(item.area)}</strong></div>
+          <div class="spec"><span>間取り</span><strong>${escapeHtml(item.layoutLabel)}</strong></div>
+          <div class="spec"><span>家賃</span><strong>${escapeHtml(item.rentLabel)}</strong></div>
+          <div class="spec"><span>駅徒歩</span><strong>${escapeHtml(item.walkLabel)}</strong></div>
+        </div>
+        ${issues.length ? `<p class="quality-note">要確認：${issues.map(escapeHtml).join(" / ")}</p>` : ""}
+        <p class="note">${escapeHtml(item.note)}</p>
+        <div class="card-actions">
+          <a class="open-link" href="${escapeAttr(item.url)}" target="_blank" rel="noopener">${isSourceLink ? "公式検索を開く" : "物件ページを開く"}</a>
+          ${item.subUrl && item.subUrl !== item.url ? `<a class="sub-link" href="${escapeAttr(item.subUrl)}" target="_blank" rel="noopener">取得元を見る</a>` : ""}
+        </div>
+      </div>
+    </article>
+  `;
 }
 
 function renderNews() {
