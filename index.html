@@ -53,6 +53,14 @@
         <button id="resetButton" class="ghost-button" type="button">初期条件に戻す</button>
       </div>
 
+      <div id="dataStatus" class="data-status" role="status">
+        <span class="status-dot"></span>
+        <div>
+          <strong>データ取得モードを確認中</strong>
+          <p>API設定があればCloudflare Workersから取得し、未設定ならローカルJSONを表示します。</p>
+        </div>
+      </div>
+
       <form class="filters" aria-label="物件検索条件">
         <label>
           エリア
@@ -193,6 +201,7 @@
     <p>© 2026 福岡シニア賃貸ウォッチ / home-select</p>
   </footer>
 
+  <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
