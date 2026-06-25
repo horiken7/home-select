@@ -13,10 +13,12 @@
     "walkLabel": "15分以内で検索可",
     "flexibleRent": true,
     "flexibleWalk": true,
-    "tags": ["UR", "公的", "保証人不要", "2LDK以上"],
+    "tags": ["UR", "公的", "保証人不要", "2LDK以上", "代表画像"],
     "note": "URは保証人不要・更新料なし等の特徴があるため、定年後・無職可能性ありの住み替え候補として優先度が高いです。",
     "url": "https://www.ur-net.go.jp/chintai/kyushu/fukuoka/area/",
-    "subUrl": "https://www.ur-net.go.jp/chintai/about/"
+    "subUrl": "https://www.ur-net.go.jp/chintai/about/",
+    "imageUrl": "https://images.unsplash.com/photo-1560184897-ae75f418493e?auto=format&fit=crop&w=900&q=75",
+    "imageLabel": "代表画像"
   },
   {
     "title": "UR賃貸 福岡市早良区エリア検索",
@@ -32,10 +34,12 @@
     "walkLabel": "15分以内で検索可",
     "flexibleRent": true,
     "flexibleWalk": true,
-    "tags": ["UR", "公的", "保証人不要", "駅近重視"],
+    "tags": ["UR", "公的", "保証人不要", "駅近重視", "代表画像"],
     "note": "早良区は生活利便性と交通アクセスのバランスが良く、夫婦2人の定年後生活に向きます。",
     "url": "https://www.ur-net.go.jp/chintai/kyushu/fukuoka/area/",
-    "subUrl": "https://www.ur-net.go.jp/chintai/about/"
+    "subUrl": "https://www.ur-net.go.jp/chintai/about/",
+    "imageUrl": "https://images.unsplash.com/photo-1560448204-603b3fc33ddc?auto=format&fit=crop&w=900&q=75",
+    "imageLabel": "代表画像"
   },
   {
     "title": "UR賃貸 福岡市城南区エリア検索",
@@ -51,10 +55,12 @@
     "walkLabel": "15分以内で検索可",
     "flexibleRent": true,
     "flexibleWalk": true,
-    "tags": ["UR", "公的", "保証人不要", "住宅地"],
+    "tags": ["UR", "公的", "保証人不要", "住宅地", "代表画像"],
     "note": "城南区は中央区より家賃を抑えやすく、七隈線沿線の生活利便性を狙えます。",
     "url": "https://www.ur-net.go.jp/chintai/kyushu/fukuoka/area/",
-    "subUrl": "https://www.ur-net.go.jp/chintai/about/"
+    "subUrl": "https://www.ur-net.go.jp/chintai/about/",
+    "imageUrl": "https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=900&q=75",
+    "imageLabel": "代表画像"
   },
   {
     "title": "福岡市 居住支援協議会・住まいサポートふくおか",
@@ -70,10 +76,12 @@
     "walkLabel": "物件ごとに確認",
     "flexibleRent": true,
     "flexibleWalk": true,
-    "tags": ["行政", "高齢者相談", "保証会社", "条件要確認"],
+    "tags": ["行政", "高齢者相談", "保証会社", "条件要確認", "代表画像"],
     "note": "無職・年金見込み・保証人問題が心配な場合、物件探しと並行して最優先で確認したい相談窓口です。",
     "url": "https://www.city.fukuoka.lg.jp/jutaku-toshi/jigyochosei/life/kyojuushienkyougikai.html",
-    "subUrl": "https://www.city.fukuoka.lg.jp/"
+    "subUrl": "https://www.city.fukuoka.lg.jp/",
+    "imageUrl": "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=900&q=75",
+    "imageLabel": "相談・支援"
   },
   {
     "title": "居住サポート住宅・セーフティネット関連",
@@ -89,29 +97,12 @@
     "walkLabel": "物件ごとに確認",
     "flexibleRent": true,
     "flexibleWalk": true,
-    "tags": ["行政", "公的", "高齢者相談", "家賃要確認"],
+    "tags": ["行政", "公的", "高齢者相談", "家賃要確認", "代表画像"],
     "note": "高齢者・低所得・保証人不安などの条件で使える可能性があるため、行政支援の中核として扱います。",
     "url": "https://www.city.fukuoka.lg.jp/jutaku-toshi/jigyochosei/life/kyojusupportnintei.html",
-    "subUrl": "https://www.safetynet-jutaku.jp/guest/index.php"
-  },
-  {
-    "title": "サービス付き高齢者向け住宅 福岡県検索",
-    "subtitle": "将来の見守り・生活相談サービスも視野に入れる候補",
-    "area": "福岡市南区",
-    "areaGroup": "fukuoka_city",
-    "type": "senior",
-    "layoutMin": 2,
-    "layoutLabel": "1LDK〜2LDK中心",
-    "rentHint": 12,
-    "rentLabel": "10万円超も多く要確認",
-    "walkHint": 20,
-    "walkLabel": "物件ごとに確認",
-    "flexibleRent": true,
-    "flexibleWalk": true,
-    "tags": ["高齢者相談", "行政", "条件要確認", "初期費用高め"],
-    "note": "2LDK以上・10万円以内は厳しい可能性もありますが、将来の安心を考える比較対象として残します。",
-    "url": "https://www.satsuki-jutaku.mlit.go.jp/search/list.php?pref_code=40",
-    "subUrl": "https://www.satsuki-jutaku.mlit.go.jp/"
+    "subUrl": "https://www.safetynet-jutaku.jp/guest/index.php",
+    "imageUrl": "https://images.unsplash.com/photo-1560449752-46e5f64b01aa?auto=format&fit=crop&w=900&q=75",
+    "imageLabel": "制度対象候補"
   },
   {
     "title": "福岡市東区 一般賃貸検索",
@@ -127,10 +118,12 @@
     "walkLabel": "15分以内",
     "flexibleRent": false,
     "flexibleWalk": false,
-    "tags": ["一般賃貸", "保証会社", "2LDK以上"],
+    "tags": ["一般賃貸", "保証会社", "2LDK以上", "代表画像"],
     "note": "一般賃貸は保証会社・収入証明・預貯金審査などを個別確認する必要があります。",
     "url": "https://www.homes.co.jp/chintai/fukuoka/fukuoka_higashi-city/",
-    "subUrl": "https://www.city.fukuoka.lg.jp/"
+    "subUrl": "https://www.city.fukuoka.lg.jp/",
+    "imageUrl": "https://images.unsplash.com/photo-1560448075-bb485b067938?auto=format&fit=crop&w=900&q=75",
+    "imageLabel": "代表画像"
   },
   {
     "title": "福岡市南区 一般賃貸検索",
@@ -146,10 +139,12 @@
     "walkLabel": "15分以内",
     "flexibleRent": false,
     "flexibleWalk": false,
-    "tags": ["一般賃貸", "保証会社", "2LDK以上"],
+    "tags": ["一般賃貸", "保証会社", "2LDK以上", "代表画像"],
     "note": "南区は福岡市内で候補を増やすうえで重要です。駅徒歩と坂道の確認がポイントです。",
     "url": "https://www.homes.co.jp/chintai/fukuoka/fukuoka_minami-city/",
-    "subUrl": "https://www.city.fukuoka.lg.jp/"
+    "subUrl": "https://www.city.fukuoka.lg.jp/",
+    "imageUrl": "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=75",
+    "imageLabel": "代表画像"
   },
   {
     "title": "糸島市 2LDK以上検索",
@@ -165,10 +160,12 @@
     "walkLabel": "駅徒歩20分・車利用も視野",
     "flexibleRent": false,
     "flexibleWalk": true,
-    "tags": ["周辺市町村", "一般賃貸", "2LDK以上"],
+    "tags": ["周辺市町村", "一般賃貸", "2LDK以上", "代表画像"],
     "note": "福岡市西区志向なら、糸島市は住環境・家賃面で比較する価値があります。",
     "url": "https://www.homes.co.jp/chintai/fukuoka/itoshima-city/",
-    "subUrl": "https://www.city.itoshima.lg.jp/"
+    "subUrl": "https://www.city.itoshima.lg.jp/",
+    "imageUrl": "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=900&q=75",
+    "imageLabel": "代表画像"
   },
   {
     "title": "春日市・大野城市 周辺賃貸検索",
@@ -184,10 +181,12 @@
     "walkLabel": "15分以内",
     "flexibleRent": false,
     "flexibleWalk": false,
-    "tags": ["周辺市町村", "一般賃貸", "保証会社"],
+    "tags": ["周辺市町村", "一般賃貸", "保証会社", "代表画像"],
     "note": "JR・西鉄アクセスを使いやすく、福岡市内より広い部屋を狙える可能性があります。",
     "url": "https://www.homes.co.jp/chintai/fukuoka/kasuga-city/",
-    "subUrl": "https://www.city.kasuga.fukuoka.jp/"
+    "subUrl": "https://www.city.kasuga.fukuoka.jp/",
+    "imageUrl": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=900&q=75",
+    "imageLabel": "代表画像"
   },
   {
     "title": "古賀市・新宮町 周辺賃貸検索",
@@ -203,9 +202,11 @@
     "walkLabel": "駅徒歩20分・車利用も視野",
     "flexibleRent": false,
     "flexibleWalk": true,
-    "tags": ["周辺市町村", "一般賃貸", "2LDK以上"],
+    "tags": ["周辺市町村", "一般賃貸", "2LDK以上", "代表画像"],
     "note": "福岡市東区の候補が高い場合、古賀市・新宮町まで広げると選択肢が増えます。",
     "url": "https://www.homes.co.jp/chintai/fukuoka/koga-city/",
-    "subUrl": "https://www.city.koga.fukuoka.jp/"
+    "subUrl": "https://www.city.koga.fukuoka.jp/",
+    "imageUrl": "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=900&q=75",
+    "imageLabel": "代表画像"
   }
 ]
