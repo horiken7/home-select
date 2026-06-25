@@ -1,5 +1,5 @@
 // Cloudflare Workers API for home-select
-// Google Programmable Search API connector version.
+// Google Programmable Search API + direct UR result connector.
 //
 // Required Cloudflare Workers secrets:
 // - GOOGLE_API_KEY
@@ -8,6 +8,7 @@
 // Routes:
 // - GET /health
 // - GET /search?area=all&layout=2&rent=10&walk=15&type=all&priority=balanced
+// - GET /debug/ur
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -17,6 +18,8 @@ const CORS_HEADERS = {
 
 const GOOGLE_SEARCH_ENDPOINT = "https://customsearch.googleapis.com/customsearch/v1";
 const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=900&q=75";
+const UR_DIRECT_RESULT_URL = "https://www.ur-net.go.jp/chintai/kyushu/fukuoka/result/?area=01&skcs=133&skcs=131&skcs=134&skcs=137&skcs=136&area=01&skcs=133&skcs=131&skcs=134&skcs=137&skcs=136&rent_low=&rent_high=&rent_low=&rent_high=&walk=&walk=&floorspace_low=&floorspace_high=&floorspace_low=&floorspace_high=&years=&years=&tdfk=40&todofuken=fukuoka";
+const UR_ORIGIN = "https://www.ur-net.go.jp";
 
 const AREA_PRIORITY = {
   "福岡市西区": 100,
@@ -78,18 +81,24 @@ export default {
         ok: true,
         service: "home-select-search",
         googleApiConfigured: Boolean(env.GOOGLE_API_KEY && env.GOOGLE_CSE_ID),
+        urDirectConfigured: true,
         now: new Date().toISOString()
       });
     }
 
+    if (url.pathname === "/debug/ur") {
+      const filters = parseFilters(url.searchParams);
+      try {
+        const properties = await fetchUrDirectResults(filters);
+        return json({ ok: true, count: properties.length, properties });
+      } catch (error) {
+        return json({ ok: false, error: error.message }, 500);
+      }
+    }
+
     if (url.pathname === "/search" || url.pathname === "/") {
       const filters = parseFilters(url.searchParams);
-
-      if (!env.GOOGLE_API_KEY || !env.GOOGLE_CSE_ID) {
-        return json(buildSeedResponse(filters, "missing-google-secrets", "Google API Key または Search Engine ID が未設定です。WorkersのSecret設定後に実検索へ切り替わります。"));
-      }
-
-      const result = await buildGoogleSearchResponse(env, filters);
+      const result = await buildSearchResponse(env, filters);
       return json(result);
     }
 
@@ -97,27 +106,87 @@ export default {
   }
 };
 
-async function buildGoogleSearchResponse(env, filters) {
+async function buildSearchResponse(env, filters) {
   const errors = [];
-  const propertyQueries = buildPropertyQueries(filters);
-  const newsQuery = buildNewsQuery(filters);
   const propertyResults = [];
+  let urDirectCount = 0;
 
-  for (const queryInfo of propertyQueries) {
+  if (["all", "public", "ur"].includes(filters.type)) {
     try {
-      const items = await googleSearch(env, queryInfo.query, 10);
-      for (const item of items) {
-        const normalized = normalizeProperty(item, queryInfo, filters);
-        if (normalized) propertyResults.push(normalized);
-      }
+      const urResults = await fetchUrDirectResults(filters);
+      urDirectCount = urResults.length;
+      propertyResults.push(...urResults);
     } catch (error) {
-      errors.push(`${queryInfo.label}: ${error.message}`);
+      errors.push(`UR公式直接取得: ${error.message}`);
     }
   }
 
+  if (env.GOOGLE_API_KEY && env.GOOGLE_CSE_ID) {
+    const propertyQueries = buildPropertyQueries(filters);
+    for (const queryInfo of propertyQueries) {
+      try {
+        const items = await googleSearch(env, queryInfo.query, 10);
+        for (const item of items) {
+          const normalized = normalizeProperty(item, queryInfo, filters);
+          if (normalized) propertyResults.push(normalized);
+        }
+      } catch (error) {
+        errors.push(`${queryInfo.label}: ${error.message}`);
+      }
+    }
+
+    const news = await fetchNews(env, filters, errors);
+    const properties = finalizeProperties(propertyResults, filters);
+
+    if (properties.length) {
+      return {
+        meta: {
+          mode: urDirectCount ? "ur-direct-google-api" : "google-api",
+          message: urDirectCount
+            ? "UR公式検索結果を直接取得し、不足分をGoogle Programmable Search APIで補完しています。"
+            : "Google Programmable Search APIから対象ソースの検索結果を取得しています。",
+          generatedAt: new Date().toISOString(),
+          filters,
+          urDirectCount,
+          googleApiConfigured: true,
+          errors
+        },
+        properties,
+        news: news.length ? dedupeByUrl(news).slice(0, 6) : buildDefaultNews()
+      };
+    }
+
+    const fallback = buildSeedResponse(filters, "no-results", "UR公式直接取得とGoogle API検索を実行しましたが、表示できる候補が取れませんでした。検索対象設定またはURページ構造を確認してください。");
+    fallback.meta.errors = errors;
+    return fallback;
+  }
+
+  const properties = finalizeProperties(propertyResults, filters);
+  if (properties.length) {
+    return {
+      meta: {
+        mode: "ur-direct-only",
+        message: "Google APIは未設定ですが、UR公式検索結果を直接取得しています。",
+        generatedAt: new Date().toISOString(),
+        filters,
+        urDirectCount,
+        googleApiConfigured: false,
+        errors
+      },
+      properties,
+      news: buildDefaultNews()
+    };
+  }
+
+  const fallback = buildSeedResponse(filters, "missing-google-secrets", "Google API Key または Search Engine ID が未設定です。UR公式直接取得にも失敗したため、補助候補を表示します。");
+  fallback.meta.errors = errors;
+  return fallback;
+}
+
+async function fetchNews(env, filters, errors) {
   const news = [];
   try {
-    const newsItems = await googleSearch(env, newsQuery, 10);
+    const newsItems = await googleSearch(env, buildNewsQuery(filters), 10);
     for (const item of newsItems) {
       const normalized = normalizeNews(item);
       if (normalized) news.push(normalized);
@@ -125,34 +194,149 @@ async function buildGoogleSearchResponse(env, filters) {
   } catch (error) {
     errors.push(`administrative-news: ${error.message}`);
   }
+  return news;
+}
 
-  const dedupedProperties = dedupeByUrl(propertyResults)
+function finalizeProperties(items, filters) {
+  return dedupeByUrl(items)
     .filter((item) => item.type !== "senior")
     .filter((item) => isAreaMatch(item, filters.area))
     .filter((item) => isTypeMatch(item, filters.type))
-    .map((item) => ({ ...item, score: calcScore(item, filters) }))
+    .map((item) => ({ ...item, score: typeof item.score === "number" ? item.score : calcScore(item, filters) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
+}
 
-  if (!dedupedProperties.length) {
-    const fallback = buildSeedResponse(filters, "google-api-no-results", "Google APIには接続しましたが、対象ソースから物件候補を取得できませんでした。Programmable Search Engineの検索対象設定を確認してください。");
-    fallback.meta.errors = errors;
-    fallback.meta.queries = propertyQueries.map((q) => q.query);
-    return fallback;
+async function fetchUrDirectResults(filters) {
+  const res = await fetch(UR_DIRECT_RESULT_URL, {
+    headers: {
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "ja,en-US;q=0.8,en;q=0.6",
+      "User-Agent": "Mozilla/5.0 home-select-search/1.0"
+    }
+  });
+
+  if (!res.ok) {
+    throw new Error(`UR HTTP ${res.status}`);
   }
 
+  const html = await res.text();
+  const parsed = parseUrHtml(html, filters);
+  if (!parsed.length) {
+    throw new Error("URページから物件カードを抽出できませんでした");
+  }
+  return parsed;
+}
+
+function parseUrHtml(html, filters) {
+  const results = [];
+  const anchorRe = /<a\b[^>]*href=["']([^"']*\/chintai\/kyushu\/fukuoka\/[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let match;
+
+  while ((match = anchorRe.exec(html)) !== null) {
+    const href = match[1];
+    const title = normalizeTitle(stripTags(match[2]));
+    if (!isLikelyUrPropertyTitle(title)) continue;
+
+    const start = Math.max(0, match.index - 1400);
+    const end = Math.min(html.length, match.index + 3200);
+    const block = html.slice(start, end);
+    const item = normalizeUrBlock(title, href, block, filters);
+    if (item) results.push(item);
+  }
+
+  if (results.length) return dedupeByTitle(results).slice(0, 12);
+
+  return parseUrHtmlFallback(html, filters).slice(0, 12);
+}
+
+function parseUrHtmlFallback(html, filters) {
+  const text = stripTags(html);
+  const chunks = text.split(/空室状況/).slice(0, 20);
+  const results = [];
+
+  for (let i = 1; i < chunks.length; i++) {
+    const before = chunks[i - 1].slice(-900);
+    const after = chunks[i].slice(0, 900);
+    const combined = `${before} 空室状況 ${after}`;
+    const title = guessUrTitleFromText(before);
+    if (!isLikelyUrPropertyTitle(title)) continue;
+
+    const item = normalizeUrTextBlock(title, combined, filters, UR_DIRECT_RESULT_URL);
+    if (item) results.push(item);
+  }
+
+  return dedupeByTitle(results);
+}
+
+function normalizeUrBlock(title, href, block, filters) {
+  const text = stripTags(block);
+  const url = absoluteUrl(href);
+  const area = detectArea(text);
+  const layout = extractLayout(text, filters.layout);
+  const rent = extractRent(text, filters.rent);
+  const walk = extractWalk(text, filters.walk);
+  const vacancy = extractVacancy(text);
+  const imageUrl = extractUrImage(block);
+  const transit = extractTransit(text);
+
   return {
-    meta: {
-      mode: "google-api",
-      message: "Google Programmable Search APIから対象ソースの検索結果を取得しています。",
-      generatedAt: new Date().toISOString(),
-      filters,
-      queryCount: propertyQueries.length + 1,
-      queries: propertyQueries.map((q) => q.query),
-      errors
-    },
-    properties: dedupedProperties,
-    news: news.length ? dedupeByUrl(news).slice(0, 6) : buildDefaultNews()
+    title,
+    subtitle: transit || "UR公式検索結果から取得した候補です。",
+    area,
+    areaGroup: area.startsWith("福岡市") ? "fukuoka_city" : "surrounding",
+    type: "ur",
+    source: "UR都市機構・公式直接取得",
+    layoutMin: layout.min,
+    layoutLabel: layout.label,
+    rentHint: rent.value,
+    rentLabel: rent.label,
+    walkHint: walk.value,
+    walkLabel: walk.label,
+    flexibleRent: rent.flexible,
+    flexibleWalk: walk.flexible,
+    tags: ["UR", "公的", "保証人不要", "UR公式直接", imageUrl ? "取得画像" : "代表画像"],
+    note: vacancy
+      ? `UR公式検索結果から取得。空室状況は${vacancy}件として表示されています。最新条件はリンク先で確認してください。`
+      : "UR公式検索結果から取得。空室・家賃・間取りはリンク先で確認してください。",
+    url,
+    subUrl: "https://www.ur-net.go.jp/chintai/about/",
+    imageUrl: imageUrl || DEFAULT_IMAGE,
+    imageLabel: imageUrl ? "UR取得画像" : "代表画像"
+  };
+}
+
+function normalizeUrTextBlock(title, text, filters, url) {
+  const area = detectArea(text);
+  const layout = extractLayout(text, filters.layout);
+  const rent = extractRent(text, filters.rent);
+  const walk = extractWalk(text, filters.walk);
+  const vacancy = extractVacancy(text);
+  const transit = extractTransit(text);
+
+  return {
+    title,
+    subtitle: transit || "UR公式検索結果から取得した候補です。",
+    area,
+    areaGroup: area.startsWith("福岡市") ? "fukuoka_city" : "surrounding",
+    type: "ur",
+    source: "UR都市機構・公式直接取得",
+    layoutMin: layout.min,
+    layoutLabel: layout.label,
+    rentHint: rent.value,
+    rentLabel: rent.label,
+    walkHint: walk.value,
+    walkLabel: walk.label,
+    flexibleRent: rent.flexible,
+    flexibleWalk: walk.flexible,
+    tags: ["UR", "公的", "保証人不要", "UR公式直接", "代表画像"],
+    note: vacancy
+      ? `UR公式検索結果から取得。空室状況は${vacancy}件として表示されています。最新条件はリンク先で確認してください。`
+      : "UR公式検索結果から取得。空室・家賃・間取りはリンク先で確認してください。",
+    url,
+    subUrl: "https://www.ur-net.go.jp/chintai/about/",
+    imageUrl: DEFAULT_IMAGE,
+    imageLabel: "代表画像"
   };
 }
 
@@ -165,12 +349,7 @@ function buildSeedResponse(filters, mode, message) {
     .slice(0, 10);
 
   return {
-    meta: {
-      mode,
-      message,
-      generatedAt: new Date().toISOString(),
-      filters
-    },
+    meta: { mode, message, generatedAt: new Date().toISOString(), filters },
     properties,
     news: buildDefaultNews()
   };
@@ -215,7 +394,7 @@ function areaTermsFromFilter(areaFilter) {
   if (areaFilter === "preferred_wards") return "福岡市西区 福岡市早良区 福岡市城南区";
   if (areaFilter === "fukuoka_city") return "福岡市 西区 早良区 城南区 中央区 博多区 東区 南区";
   if (areaFilter === "surrounding") return "糸島市 春日市 大野城市 那珂川市 古賀市 新宮町 粕屋町 志免町 太宰府市 宇美町";
-  return "福岡市 西区 早良区 城南区 中央区 博多区 東区 南区 糸島市 春日市 春日市 大野城市 那珂川市 古賀市 新宮町 粕屋町 志免町 太宰府市 宇美町";
+  return "福岡市 西区 早良区 城南区 中央区 博多区 東区 南区 糸島市 春日市 大野城市 那珂川市 古賀市 新宮町 粕屋町 志免町 太宰府市 宇美町";
 }
 
 async function googleSearch(env, query, num = 10) {
@@ -287,16 +466,58 @@ function normalizeNews(item) {
   const url = item.link;
   if (!url || !title) return null;
   if (isExcluded(`${title} ${summary} ${url}`)) return null;
-  return {
-    source: detectSource(url, "行政・住宅支援"),
-    title,
-    summary,
-    url
-  };
+  return { source: detectSource(url, "行政・住宅支援"), title, summary, url };
 }
 
 function clean(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function stripTags(html) {
+  return decodeHtml(String(html || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<br\s*\/?>(\s*)/gi, " ")
+    .replace(/<[^>]+>/g, " "))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function decodeHtml(value) {
+  return String(value || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&nbsp;/g, " ");
+}
+
+function normalizeTitle(value) {
+  return clean(value).replace(/\s+/g, " ").replace(/[｜|].*$/, "").trim();
+}
+
+function isLikelyUrPropertyTitle(title) {
+  if (!title || title.length < 2 || title.length > 34) return false;
+  if (/UR賃貸住宅|TOP|九州|福岡県|福岡市|物件を探す|店舗を探す|よくある|こちら|建物情報|お問い合わせ|お気に入り|空室状況|礼金|仲介手数料|更新料|保証人|PDF|選択/.test(title)) return false;
+  if (/^[0-9０-９]+$/.test(title)) return false;
+  return true;
+}
+
+function guessUrTitleFromText(text) {
+  const cleaned = clean(text);
+  const patterns = [
+    /([一-龥ぁ-んァ-ンーA-Za-z0-9０-９・\s]{2,28})\s+お気に入り/,
+    /([一-龥ぁ-んァ-ンーA-Za-z0-9０-９・\s]{2,28})\s+福岡市/,
+    /([一-龥ぁ-んァ-ンーA-Za-z0-9０-９・\s]{2,28})\s+JR/,
+    /([一-龥ぁ-んァ-ンーA-Za-z0-9０-９・\s]{2,28})\s+西鉄/,
+    /([一-龥ぁ-んァ-ンーA-Za-z0-9０-９・\s]{2,28})\s+地下鉄/
+  ];
+  for (const pattern of patterns) {
+    const match = cleaned.match(pattern);
+    if (match) return normalizeTitle(match[1]);
+  }
+  return "";
 }
 
 function isExcluded(text) {
@@ -317,7 +538,7 @@ function detectArea(text) {
   if (/別府|七隈|茶山|金山|福大前/.test(text)) return "福岡市城南区";
   if (/天神|薬院|六本松|大濠|唐人町|平尾/.test(text)) return "福岡市中央区";
   if (/博多|吉塚|竹下|東比恵|千代/.test(text)) return "福岡市博多区";
-  if (/香椎|千早|箱崎|和白|照葉/.test(text)) return "福岡市東区";
+  if (/香椎|千早|箱崎|和白|照葉|星の原/.test(text)) return "福岡市東区";
   if (/大橋|高宮|井尻|平尾|笹原/.test(text)) return "福岡市南区";
   return "福岡市西区";
 }
@@ -343,12 +564,43 @@ function extractWalk(text, defaultWalk) {
   return { value, label: `徒歩${value}分`, flexible: value <= defaultWalk };
 }
 
+function extractVacancy(text) {
+  const match = text.match(/空室状況\s*([0-9０-９]+)|該当空室数\s*([0-9０-９]+)/);
+  const raw = match?.[1] || match?.[2] || "";
+  return raw ? raw.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)) : "";
+}
+
+function extractTransit(text) {
+  const match = text.match(/((?:JR|西鉄|福岡市営|地下鉄|福岡市地下鉄|市営地下鉄)[^。]{0,120}?(?:徒歩|バス)[^。]{0,80}?(?:分|団地))/);
+  return match ? clean(match[1]) : "";
+}
+
 function extractImage(item) {
   const pagemap = item.pagemap || {};
   const thumb = pagemap.cse_thumbnail?.[0]?.src;
   const cseImage = pagemap.cse_image?.[0]?.src;
   const ogImage = pagemap.metatags?.[0]?.["og:image"];
   return thumb || cseImage || ogImage || "";
+}
+
+function extractUrImage(block) {
+  const images = [];
+  const imgRe = /<img\b[^>]*src=["']([^"']+\.(?:jpg|jpeg|png|webp)(?:\?[^"']*)?)["'][^>]*>/gi;
+  let match;
+  while ((match = imgRe.exec(block)) !== null) {
+    const src = match[1];
+    if (/logo|icon|bnr|button|favorite|sprite/i.test(src)) continue;
+    images.push(absoluteUrl(src));
+  }
+  return images[0] || "";
+}
+
+function absoluteUrl(value) {
+  try {
+    return new URL(decodeHtml(value), UR_ORIGIN).href;
+  } catch {
+    return value;
+  }
 }
 
 function detectSource(url, fallback) {
@@ -393,6 +645,16 @@ function dedupeByUrl(items) {
   const seen = new Set();
   return items.filter((item) => {
     const key = item.url;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function dedupeByTitle(items) {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = `${item.title}-${item.area}`;
     if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;
