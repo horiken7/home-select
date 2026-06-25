@@ -12,20 +12,18 @@
 - 対象エリア：福岡市全域、南区含む、福岡市周辺市町村
 - 現時点では「サービス付き高齢者向け住宅（サ高住）」は対象外
 
-## 第4版の更新
+## 第5版の更新
 
-- Cloudflare Workers側に Google Programmable Search API 接続処理を追加
-- WorkersのSecretとして `GOOGLE_API_KEY` と `GOOGLE_CSE_ID` を使う設計に変更
-- `/search` で以下の対象ソースをGoogle検索し、結果を物件カード形式へ整形
-  - UR都市機構
-  - セーフティネット住宅
-  - 福岡市・福岡県の居住支援、補助制度ページ
-  - LIFULL HOME'S
-  - SUUMO
-  - アットホーム
-  - CHINTAI
-- サ高住、老人ホーム、介護施設、有料老人ホーム系ワードは除外
-- 検索結果から `pagemap.cse_thumbnail` / `cse_image` / `og:image` が取れる場合は物件画像として表示
+Cloudflareのオンラインエディタでファイルが正しく開けない問題を避けるため、GitHubからWorkerをデプロイできる構成を追加しました。
+
+追加ファイル：
+
+```text
+worker-entry.js
+wrangler.toml
+package.json
+.github/workflows/deploy-worker.yml
+```
 
 ## ファイル構成
 
@@ -35,46 +33,56 @@
 ├─ styles.css
 ├─ app.js
 ├─ config.js
+├─ worker-entry.js
+├─ wrangler.toml
+├─ package.json
 ├─ data/
 │  ├─ properties.json
 │  └─ news.json
-└─ workers/
-   └─ property-search-worker.js
+├─ workers/
+│  └─ property-search-worker.js
+└─ .github/workflows/
+   └─ deploy-worker.yml
 ```
 
-## Google Programmable Search API 接続手順
+## Google Programmable Search API 用のSecret
 
-### 1. Google側で取得するもの
-
-以下の2つが必要です。
+Workerには以下の2つが必要です。
 
 ```text
 GOOGLE_API_KEY
 GOOGLE_CSE_ID
 ```
 
-注意：Google公式ドキュメントでは、Custom Search JSON APIが新規顧客向けには閉じられている旨が案内されています。既に有効化できるGoogle Cloudアカウントで進める前提です。
+## Cloudflare WorkersをGitHubから接続する方針
 
-### 2. Cloudflare WorkersへSecret登録
+Cloudflareのオンラインエディタで直接編集せず、`horiken7/home-select` のGitHubリポジトリからデプロイします。
 
-Cloudflare Workersの対象Workerで、以下のSecretを登録します。
-
-```text
-GOOGLE_API_KEY = Google Custom Search API Key
-GOOGLE_CSE_ID = Programmable Search Engine ID
-```
-
-### 3. Workersにコードを貼り付け
-
-Cloudflare Workersのエディタに、以下のファイル内容を貼り付けてデプロイします。
+Cloudflare側では、WorkerのソースとしてGitHubリポジトリを接続し、ビルド/デプロイ設定で以下を使います。
 
 ```text
-workers/property-search-worker.js
+Repository: horiken7/home-select
+Branch: main
+Build command: npm install
+Deploy command: npm run deploy:worker
+Worker config: wrangler.toml
+Entry point: worker-entry.js
 ```
 
-### 4. Workersの動作確認
+## GitHub Actionsでデプロイする場合
 
-WorkersのURLが以下の場合、
+GitHubのRepository Secretsに以下を登録します。
+
+```text
+CLOUDFLARE_API_TOKEN
+CLOUDFLARE_ACCOUNT_ID
+```
+
+その後、GitHub Actionsの `Deploy Cloudflare Worker` を手動実行するか、mainブランチにWorker関連ファイルをpushするとデプロイされます。
+
+## 動作確認URL
+
+WorkerのURLが以下の場合、
 
 ```text
 https://home-select-search.example.workers.dev
@@ -87,11 +95,11 @@ https://home-select-search.example.workers.dev/health
 https://home-select-search.example.workers.dev/search?area=all&layout=2&rent=10&walk=15&type=all&priority=balanced
 ```
 
-`/health` の `googleApiConfigured` が `true` なら、Secret設定は成功です。
+`/health` の `googleApiConfigured` が `true` なら、Google APIのSecret設定は成功です。
 
-### 5. `config.js` を更新
+## `config.js` の更新
 
-`config.js` の `apiEndpoint` にWorkers URLを入れます。
+Workerが動いたら、`config.js` の `apiEndpoint` にWorkers URLを入れます。
 
 ```js
 window.HOME_SELECT_CONFIG = {
@@ -99,15 +107,10 @@ window.HOME_SELECT_CONFIG = {
 };
 ```
 
-### 6. GitHub Pagesで確認
-
-サイト上部のステータスが「Cloudflare Workers API接続中」になれば接続成功です。
-
 ## 今後の予定
 
-1. Google API Key と Search Engine ID を取得
-2. Cloudflare WorkersにSecret登録
-3. Workersをデプロイ
+1. Cloudflareのオンラインエディタ編集を中止
+2. GitHub接続方式でWorkerをデプロイ
+3. Google API Key と Search Engine ID をSecret登録
 4. `config.js` にWorkers URLを設定
 5. 実検索結果の精度を確認し、検索クエリを調整
-6. 必要に応じて SerpAPI / Bing / Vertex AI Search への切替も検討
