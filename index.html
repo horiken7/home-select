@@ -60,7 +60,7 @@
         <span class="status-dot"></span>
         <div>
           <strong>データ取得モードを確認中</strong>
-          <p>API設定があればCloudflare Workersから取得し、未設定ならローカルJSONを表示します。</p>
+          <p>GitHub Actions + Playwright で取得したJSONを読み込みます。</p>
         </div>
       </div>
 
@@ -135,7 +135,7 @@
       <div class="summary-strip">
         <div>
           <span id="matchCount">0</span>
-          <small>件の候補</small>
+          <small>実取得・要確認候補</small>
         </div>
         <div>
           <span id="topArea">-</span>
@@ -152,10 +152,10 @@
       <div class="section-title">
         <div>
           <p class="section-kicker">Rental Candidates</p>
-          <h2>🏘️ 条件に近い候補・画像付き検索導線</h2>
+          <h2>🏘️ 条件に合う実取得物件・条件要確認・検索導線</h2>
           <p class="muted">
-            サ高住は除外し、UR・公的賃貸・行政斡旋・一般賃貸を中心に表示します。
-            実検索接続後は取得元の物件画像を表示します。
+            物件候補と検索導線を分けて表示します。サ高住・老人ホーム・介護施設は除外します。
+            情報が未確定の候補は「条件要確認」として明示します。
           </p>
         </div>
         <span class="updated">条件初期値：2LDK以上 / 管込10万円 / 徒歩15分</span>
@@ -182,24 +182,24 @@
       <div class="section-title">
         <div>
           <p class="section-kicker">Next Build</p>
-          <h2>🛠️ 次に追加する機能</h2>
+          <h2>🛠️ 次に追加・改善する機能</h2>
         </div>
       </div>
       <div class="roadmap-grid">
         <article>
           <strong>Step 1</strong>
-          <h3>画像付き候補表示</h3>
-          <p>検索結果カードに画像枠を追加。実データ接続後は物件画像URLを自動表示します。</p>
+          <h3>抽出精度の改善</h3>
+          <p>UR・SUUMO・HOME'Sなど、サイトごとのHTML構造に合わせて物件名・家賃・徒歩・画像・リンクの取得精度を上げます。</p>
         </article>
         <article>
           <strong>Step 2</strong>
-          <h3>検索API接続</h3>
-          <p>Cloudflare Workersを使い、UR・行政情報・検索APIの結果を整形して表示します。</p>
+          <h3>条件判定の厳格化</h3>
+          <p>2LDK以上、管込家賃、駅徒歩、サ高住除外などを、表示側でも明確に分類します。</p>
         </article>
         <article>
           <strong>Step 3</strong>
           <h3>毎日監視</h3>
-          <p>条件一致物件や支援制度ニュースに変化があったとき、レポート化します。</p>
+          <p>GitHub Actionsで毎朝取得し、条件一致物件や支援制度ニュースの変化を見つけやすくします。</p>
         </article>
       </div>
     </section>
