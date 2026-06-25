@@ -42,6 +42,7 @@ const AREA_PRIORITY = {
 };
 
 const AREA_KEYWORDS = Object.keys(AREA_PRIORITY);
+const CITY_ONLY_WORDS = new Set([...AREA_KEYWORDS, "福岡市", "福岡県", "九州", "福岡市東区", "福岡市中央区", "福岡市南区", "福岡市城南区", "福岡市早良区"]);
 
 const SEED_PROPERTIES = [
   {
@@ -143,7 +144,7 @@ async function buildSearchResponse(env, filters) {
         meta: {
           mode: urDirectCount ? "ur-direct-google-api" : "google-api",
           message: urDirectCount
-            ? "UR公式検索結果を直接取得し、不足分をGoogle Programmable Search APIで補完しています。"
+            ? "UR公式検索結果から団地・部屋情報を直接取得し、不足分をGoogle Programmable Search APIで補完しています。"
             : "Google Programmable Search APIから対象ソースの検索結果を取得しています。",
           generatedAt: new Date().toISOString(),
           filters,
@@ -166,7 +167,7 @@ async function buildSearchResponse(env, filters) {
     return {
       meta: {
         mode: "ur-direct-only",
-        message: "Google APIは未設定ですが、UR公式検索結果を直接取得しています。",
+        message: "Google APIは未設定ですが、UR公式検索結果から団地・部屋情報を直接取得しています。",
         generatedAt: new Date().toISOString(),
         filters,
         urDirectCount,
@@ -198,7 +199,7 @@ async function fetchNews(env, filters, errors) {
 }
 
 function finalizeProperties(items, filters) {
-  return dedupeByUrl(items)
+  return dedupeProperties(items)
     .filter((item) => item.type !== "senior")
     .filter((item) => isAreaMatch(item, filters.area))
     .filter((item) => isTypeMatch(item, filters.type))
@@ -212,7 +213,7 @@ async function fetchUrDirectResults(filters) {
     headers: {
       "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       "Accept-Language": "ja,en-US;q=0.8,en;q=0.6",
-      "User-Agent": "Mozilla/5.0 home-select-search/1.0"
+      "User-Agent": "Mozilla/5.0 (compatible; home-select-search/1.0; +https://horiken7.github.io/home-select/)"
     }
   });
 
@@ -230,114 +231,196 @@ async function fetchUrDirectResults(filters) {
 
 function parseUrHtml(html, filters) {
   const results = [];
-  const anchorRe = /<a\b[^>]*href=["']([^"']*\/chintai\/kyushu\/fukuoka\/[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  const normalizedHtml = String(html || "").replace(/\r?\n/g, " ");
+
+  // URの検索結果は、団地名→交通→住所→空室状況→部屋テーブル、という並びで出る。
+  // まず「空室状況」を含む大きめのカード単位で分割して、団地＋部屋の固有情報を拾う。
+  const cardRe = /(<[^>]*(?:class|id)=["'][^"']*(?:estate|property|result|article|list|panel|box|section|building|rent)[^"']*["'][^>]*>[\s\S]{0,9000}?空室状況[\s\S]{0,14000}?)(?=<[^>]*(?:class|id)=["'][^"']*(?:estate|property|result|article|list|panel|box|section|building|rent)[^"']*["']|$)/gi;
+  let match;
+  while ((match = cardRe.exec(normalizedHtml)) !== null) {
+    const items = parseUrCard(match[1], filters);
+    results.push(...items);
+  }
+
+  if (results.length) return dedupeProperties(results).slice(0, 12);
+
+  // class名が想定外の場合のフォールバック。
+  const parts = normalizedHtml.split(/空室状況/).slice(0, 30);
+  for (let i = 1; i < parts.length; i++) {
+    const block = `${parts[i - 1].slice(-5000)} 空室状況 ${parts[i].slice(0, 9000)}`;
+    const items = parseUrCard(block, filters);
+    results.push(...items);
+  }
+
+  return dedupeProperties(results).slice(0, 12);
+}
+
+function parseUrCard(block, filters) {
+  const text = stripTags(block);
+  const title = extractUrPropertyTitle(block, text);
+  if (!isLikelyUrPropertyTitle(title)) return [];
+
+  const propertyHref = extractUrPropertyHref(block) || UR_DIRECT_RESULT_URL;
+  const propertyUrl = absoluteUrl(propertyHref);
+  const area = detectArea(text);
+  const transit = extractTransit(text);
+  const address = extractUrAddress(text);
+  const propertyImage = extractUrImage(block);
+  const vacancy = extractVacancy(text);
+  const rooms = extractUrRooms(text);
+
+  if (!rooms.length) {
+    return [normalizeUrRoom({
+      propertyName: title,
+      room: null,
+      text,
+      filters,
+      propertyUrl,
+      propertyImage,
+      area,
+      transit,
+      address,
+      vacancy
+    })];
+  }
+
+  return rooms.map((room) => normalizeUrRoom({
+    propertyName: title,
+    room,
+    text,
+    filters,
+    propertyUrl: room.url || propertyUrl,
+    propertyImage: room.floorImage || propertyImage,
+    area,
+    transit,
+    address,
+    vacancy
+  }));
+}
+
+function normalizeUrRoom({ propertyName, room, text, filters, propertyUrl, propertyImage, area, transit, address, vacancy }) {
+  const layout = room?.layout ? parseLayoutLabel(room.layout, filters.layout) : extractLayout(text, filters.layout);
+  const rent = room?.rentYen ? parseRentYen(room.rentYen, room.commonFeeYen, filters.rent) : extractRent(text, filters.rent);
+  const walk = extractWalk(transit || text, filters.walk);
+  const floorLabel = room?.floor || "要確認";
+  const roomLabel = room?.roomName || "部屋番号 要確認";
+  const title = room ? `${propertyName} ${roomLabel}` : propertyName;
+  const specificImage = propertyImage || DEFAULT_IMAGE;
+  const noteParts = ["UR公式検索結果から取得。"];
+
+  if (vacancy) noteParts.push(`団地の空室状況は${vacancy}件。`);
+  if (room?.rentYen) noteParts.push(`部屋別の家賃・間取り・階数を抽出済み。`);
+  noteParts.push("最新の空室・申込状況はリンク先のUR公式ページで確認してください。");
+
+  return {
+    title,
+    subtitle: [transit, address].filter(Boolean).join(" / ") || "UR公式検索結果から取得した候補です。",
+    area,
+    areaGroup: area.startsWith("福岡市") ? "fukuoka_city" : "surrounding",
+    type: "ur",
+    source: "UR都市機構・公式直接取得",
+    layoutMin: layout.min,
+    layoutLabel: layout.label,
+    rentHint: rent.value,
+    rentLabel: rent.label,
+    walkHint: walk.value,
+    walkLabel: walk.label,
+    flexibleRent: rent.flexible,
+    flexibleWalk: walk.flexible,
+    tags: ["UR", "公的", "保証人不要", "UR公式直接", specificImage === DEFAULT_IMAGE ? "代表画像" : "取得画像", room?.floor ? `${floorLabel}` : "階数要確認"],
+    note: noteParts.join(""),
+    url: propertyUrl,
+    subUrl: "https://www.ur-net.go.jp/chintai/about/",
+    imageUrl: specificImage,
+    imageLabel: specificImage === DEFAULT_IMAGE ? "代表画像" : (room?.floorImage ? "間取図" : "UR取得画像")
+  };
+}
+
+function extractUrRooms(text) {
+  const rooms = [];
+  const normalized = normalizeFullWidth(text);
+  const roomRe = /([0-9]+号棟\s*[0-9]+号室)[\s\S]{0,180}?([0-9,]+円)\s*(?:\(([0-9,]+円)\))?[\s\S]{0,160}?([1-5]\s?(?:LDK|DK|K)\s*\/\s*[0-9.]+\s*(?:㎡|m²|m2))[\s\S]{0,100}?([0-9]+階)/gi;
   let match;
 
-  while ((match = anchorRe.exec(html)) !== null) {
-    const href = match[1];
-    const title = normalizeTitle(stripTags(match[2]));
-    if (!isLikelyUrPropertyTitle(title)) continue;
-
-    const start = Math.max(0, match.index - 1400);
-    const end = Math.min(html.length, match.index + 3200);
-    const block = html.slice(start, end);
-    const item = normalizeUrBlock(title, href, block, filters);
-    if (item) results.push(item);
+  while ((match = roomRe.exec(normalized)) !== null) {
+    rooms.push({
+      roomName: clean(match[1]),
+      rentYen: clean(match[2]),
+      commonFeeYen: clean(match[3] || ""),
+      layout: clean(match[4]).replace(/m2/i, "㎡"),
+      floor: clean(match[5]),
+      floorImage: "",
+      url: ""
+    });
   }
 
-  if (results.length) return dedupeByTitle(results).slice(0, 12);
-
-  return parseUrHtmlFallback(html, filters).slice(0, 12);
+  return rooms;
 }
 
-function parseUrHtmlFallback(html, filters) {
-  const text = stripTags(html);
-  const chunks = text.split(/空室状況/).slice(0, 20);
-  const results = [];
+function parseRentYen(rentYen, commonFeeYen, defaultRent) {
+  const yen = Number(String(rentYen).replace(/[^0-9]/g, ""));
+  const fee = Number(String(commonFeeYen || "").replace(/[^0-9]/g, ""));
+  const value = yen ? Math.round((yen / 10000) * 100) / 100 : defaultRent;
+  const feeText = fee ? `（共益費 ${fee.toLocaleString("ja-JP")}円）` : "";
+  return {
+    value,
+    label: yen ? `${yen.toLocaleString("ja-JP")}円 ${feeText}`.trim() : `${defaultRent}万円以内 / 要確認`,
+    flexible: !yen || value <= defaultRent
+  };
+}
 
-  for (let i = 1; i < chunks.length; i++) {
-    const before = chunks[i - 1].slice(-900);
-    const after = chunks[i].slice(0, 900);
-    const combined = `${before} 空室状況 ${after}`;
+function parseLayoutLabel(layoutLabel, defaultLayout) {
+  const normalized = normalizeFullWidth(layoutLabel);
+  const valueMatch = normalized.match(/([1-5])\s?(?:LDK|DK|K)/i);
+  const value = Number(valueMatch?.[1] || defaultLayout);
+  return { min: value, label: clean(normalized), flexible: false };
+}
+
+function extractUrPropertyTitle(block, text) {
+  const headingPatterns = [
+    /<h[1-4][^>]*>[\s\S]*?<a[^>]*>([\s\S]{2,120}?)<\/a>[\s\S]*?<\/h[1-4]>/i,
+    /<h[1-4][^>]*>([\s\S]{2,120}?)<\/h[1-4]>/i,
+    /<a[^>]*href=["'][^"']*\/chintai\/kyushu\/fukuoka\/[^"']*["'][^>]*>([\s\S]{2,80}?)<\/a>\s*(?:<[^>]+>\s*){0,6}お気に入り/i
+  ];
+
+  for (const pattern of headingPatterns) {
+    const match = block.match(pattern);
+    const title = normalizeTitle(stripTags(match?.[1] || ""));
+    if (isLikelyUrPropertyTitle(title)) return title;
+  }
+
+  const favoriteIndex = text.indexOf("お気に入り");
+  if (favoriteIndex > 0) {
+    const before = text.slice(Math.max(0, favoriteIndex - 90), favoriteIndex).trim();
+    const candidates = before.match(/[一-龥ぁ-んァ-ンーA-Za-z0-9０-９・ヶヶ\s]{2,34}/g) || [];
+    for (let i = candidates.length - 1; i >= 0; i--) {
+      const title = normalizeTitle(candidates[i]);
+      if (isLikelyUrPropertyTitle(title)) return title;
+    }
+  }
+
+  const addressIndex = text.search(/(?:福岡市|春日市|大野城市|糸島市|古賀市|新宮町|粕屋町|志免町|太宰府市|宇美町)/);
+  if (addressIndex > 0) {
+    const before = text.slice(Math.max(0, addressIndex - 160), addressIndex).trim();
     const title = guessUrTitleFromText(before);
-    if (!isLikelyUrPropertyTitle(title)) continue;
-
-    const item = normalizeUrTextBlock(title, combined, filters, UR_DIRECT_RESULT_URL);
-    if (item) results.push(item);
+    if (isLikelyUrPropertyTitle(title)) return title;
   }
 
-  return dedupeByTitle(results);
+  return "";
 }
 
-function normalizeUrBlock(title, href, block, filters) {
-  const text = stripTags(block);
-  const url = absoluteUrl(href);
-  const area = detectArea(text);
-  const layout = extractLayout(text, filters.layout);
-  const rent = extractRent(text, filters.rent);
-  const walk = extractWalk(text, filters.walk);
-  const vacancy = extractVacancy(text);
-  const imageUrl = extractUrImage(block);
-  const transit = extractTransit(text);
+function extractUrPropertyHref(block) {
+  const preferred = block.match(/<a\b[^>]*href=["']([^"']*\/chintai\/kyushu\/fukuoka\/(?:[0-9A-Za-z_\-\/]+)[^"']*)["'][^>]*>(?=[\s\S]{0,200}?(?:部屋詳細|建物情報|お問い合わせ|お気に入り))/i);
+  if (preferred?.[1]) return preferred[1];
 
-  return {
-    title,
-    subtitle: transit || "UR公式検索結果から取得した候補です。",
-    area,
-    areaGroup: area.startsWith("福岡市") ? "fukuoka_city" : "surrounding",
-    type: "ur",
-    source: "UR都市機構・公式直接取得",
-    layoutMin: layout.min,
-    layoutLabel: layout.label,
-    rentHint: rent.value,
-    rentLabel: rent.label,
-    walkHint: walk.value,
-    walkLabel: walk.label,
-    flexibleRent: rent.flexible,
-    flexibleWalk: walk.flexible,
-    tags: ["UR", "公的", "保証人不要", "UR公式直接", imageUrl ? "取得画像" : "代表画像"],
-    note: vacancy
-      ? `UR公式検索結果から取得。空室状況は${vacancy}件として表示されています。最新条件はリンク先で確認してください。`
-      : "UR公式検索結果から取得。空室・家賃・間取りはリンク先で確認してください。",
-    url,
-    subUrl: "https://www.ur-net.go.jp/chintai/about/",
-    imageUrl: imageUrl || DEFAULT_IMAGE,
-    imageLabel: imageUrl ? "UR取得画像" : "代表画像"
-  };
+  const any = block.match(/<a\b[^>]*href=["']([^"']*\/chintai\/kyushu\/fukuoka\/[^"']*)["']/i);
+  return any?.[1] || "";
 }
 
-function normalizeUrTextBlock(title, text, filters, url) {
-  const area = detectArea(text);
-  const layout = extractLayout(text, filters.layout);
-  const rent = extractRent(text, filters.rent);
-  const walk = extractWalk(text, filters.walk);
-  const vacancy = extractVacancy(text);
-  const transit = extractTransit(text);
-
-  return {
-    title,
-    subtitle: transit || "UR公式検索結果から取得した候補です。",
-    area,
-    areaGroup: area.startsWith("福岡市") ? "fukuoka_city" : "surrounding",
-    type: "ur",
-    source: "UR都市機構・公式直接取得",
-    layoutMin: layout.min,
-    layoutLabel: layout.label,
-    rentHint: rent.value,
-    rentLabel: rent.label,
-    walkHint: walk.value,
-    walkLabel: walk.label,
-    flexibleRent: rent.flexible,
-    flexibleWalk: walk.flexible,
-    tags: ["UR", "公的", "保証人不要", "UR公式直接", "代表画像"],
-    note: vacancy
-      ? `UR公式検索結果から取得。空室状況は${vacancy}件として表示されています。最新条件はリンク先で確認してください。`
-      : "UR公式検索結果から取得。空室・家賃・間取りはリンク先で確認してください。",
-    url,
-    subUrl: "https://www.ur-net.go.jp/chintai/about/",
-    imageUrl: DEFAULT_IMAGE,
-    imageLabel: "代表画像"
-  };
+function extractUrAddress(text) {
+  const normalized = normalizeFullWidth(text);
+  const match = normalized.match(/((?:福岡市|春日市|大野城市|糸島市|古賀市|新宮町|粕屋町|志免町|太宰府市|宇美町)[^\s]{1,40}(?:ほか)?)/);
+  return match ? clean(match[1]) : "";
 }
 
 function buildSeedResponse(filters, mode, message) {
@@ -473,11 +556,16 @@ function clean(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
+function normalizeFullWidth(value) {
+  return String(value || "").replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+}
+
 function stripTags(html) {
   return decodeHtml(String(html || "")
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<br\s*\/?>(\s*)/gi, " ")
+    .replace(/<\/tr>|<\/td>|<\/th>|<\/p>|<\/li>|<\/div>|<\/section>|<\/article>/gi, " ")
     .replace(/<[^>]+>/g, " "))
     .replace(/\s+/g, " ")
     .trim();
@@ -490,32 +578,33 @@ function decodeHtml(value) {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#039;/g, "'")
+    .replace(/&#x2F;/g, "/")
     .replace(/&nbsp;/g, " ");
 }
 
 function normalizeTitle(value) {
-  return clean(value).replace(/\s+/g, " ").replace(/[｜|].*$/, "").trim();
+  return clean(value)
+    .replace(/\s+/g, " ")
+    .replace(/[｜|].*$/, "")
+    .replace(/お気に入り.*$/, "")
+    .replace(/空室状況.*$/, "")
+    .trim();
 }
 
 function isLikelyUrPropertyTitle(title) {
   if (!title || title.length < 2 || title.length > 34) return false;
-  if (/UR賃貸住宅|TOP|九州|福岡県|福岡市|物件を探す|店舗を探す|よくある|こちら|建物情報|お問い合わせ|お気に入り|空室状況|礼金|仲介手数料|更新料|保証人|PDF|選択/.test(title)) return false;
+  if (CITY_ONLY_WORDS.has(title)) return false;
+  if (/UR賃貸住宅|TOP|九州|福岡県|福岡市|物件を探す|店舗を探す|よくある|こちら|建物情報|お問い合わせ|お気に入り|空室状況|礼金|仲介手数料|更新料|保証人|PDF|選択|部屋名|家賃|共益費|間取り|床面積|階数|部屋詳細/.test(title)) return false;
   if (/^[0-9０-９]+$/.test(title)) return false;
   return true;
 }
 
 function guessUrTitleFromText(text) {
   const cleaned = clean(text);
-  const patterns = [
-    /([一-龥ぁ-んァ-ンーA-Za-z0-9０-９・\s]{2,28})\s+お気に入り/,
-    /([一-龥ぁ-んァ-ンーA-Za-z0-9０-９・\s]{2,28})\s+福岡市/,
-    /([一-龥ぁ-んァ-ンーA-Za-z0-9０-９・\s]{2,28})\s+JR/,
-    /([一-龥ぁ-んァ-ンーA-Za-z0-9０-９・\s]{2,28})\s+西鉄/,
-    /([一-龥ぁ-んァ-ンーA-Za-z0-9０-９・\s]{2,28})\s+地下鉄/
-  ];
-  for (const pattern of patterns) {
-    const match = cleaned.match(pattern);
-    if (match) return normalizeTitle(match[1]);
+  const candidates = cleaned.match(/[一-龥ぁ-んァ-ンーA-Za-z0-9０-９・ヶ\s]{2,34}/g) || [];
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    const title = normalizeTitle(candidates[i]);
+    if (isLikelyUrPropertyTitle(title)) return title;
   }
   return "";
 }
@@ -540,38 +629,51 @@ function detectArea(text) {
   if (/博多|吉塚|竹下|東比恵|千代/.test(text)) return "福岡市博多区";
   if (/香椎|千早|箱崎|和白|照葉|星の原/.test(text)) return "福岡市東区";
   if (/大橋|高宮|井尻|平尾|笹原/.test(text)) return "福岡市南区";
+  if (/春日公園|大野城|白木原/.test(text)) return "春日市";
   return "福岡市西区";
 }
 
 function extractLayout(text, defaultLayout) {
-  const match = text.match(/([1-5])\s?LDK|([1-5])\s?DK/i);
+  const normalized = normalizeFullWidth(text);
+  const match = normalized.match(/([1-5])\s?LDK|([1-5])\s?DK/i);
   if (!match) return { min: defaultLayout, label: `${defaultLayout}LDK以上 / 要確認`, flexible: true };
   const value = Number(match[1] || match[2] || defaultLayout);
   return { min: value, label: `${value}${match[1] ? "LDK" : "DK"}`, flexible: false };
 }
 
 function extractRent(text, defaultRent) {
-  const matches = [...text.matchAll(/(\d+(?:\.\d+)?)\s?万円/g)].map((m) => Number(m[1])).filter((n) => n >= 1 && n <= 50);
+  const normalized = normalizeFullWidth(text);
+  const yenMatches = [...normalized.matchAll(/([0-9,]+)\s?円/g)].map((m) => Number(m[1].replace(/,/g, ""))).filter((n) => n >= 10000 && n <= 500000);
+  if (yenMatches.length) {
+    const yen = Math.min(...yenMatches);
+    return { value: Math.round((yen / 10000) * 100) / 100, label: `${yen.toLocaleString("ja-JP")}円目安`, flexible: yen / 10000 <= defaultRent };
+  }
+
+  const matches = [...normalized.matchAll(/(\d+(?:\.\d+)?)\s?万円/g)].map((m) => Number(m[1])).filter((n) => n >= 1 && n <= 50);
   if (!matches.length) return { value: defaultRent, label: `${defaultRent}万円以内 / 要確認`, flexible: true };
   const value = Math.min(...matches);
   return { value, label: `${value}万円目安`, flexible: value <= defaultRent };
 }
 
 function extractWalk(text, defaultWalk) {
-  const match = text.match(/徒歩\s?(\d+)\s?分/);
-  if (!match) return { value: defaultWalk, label: `徒歩${defaultWalk}分以内 / 要確認`, flexible: true };
-  const value = Number(match[1]);
-  return { value, label: `徒歩${value}分`, flexible: value <= defaultWalk };
+  const normalized = normalizeFullWidth(text);
+  const matches = [...normalized.matchAll(/徒歩\s?([0-9]+)\s?[〜~\-－]?\s?([0-9]+)?\s?分/g)]
+    .map((m) => Number(m[1]))
+    .filter(Boolean);
+  if (!matches.length) return { value: defaultWalk, label: `徒歩${defaultWalk}分以内 / 要確認`, flexible: true };
+  const value = Math.min(...matches);
+  return { value, label: `徒歩${value}分〜`, flexible: value <= defaultWalk };
 }
 
 function extractVacancy(text) {
-  const match = text.match(/空室状況\s*([0-9０-９]+)|該当空室数\s*([0-9０-９]+)/);
-  const raw = match?.[1] || match?.[2] || "";
-  return raw ? raw.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)) : "";
+  const normalized = normalizeFullWidth(text);
+  const match = normalized.match(/空室状況\s*([0-9]+)|該当空室数\s*([0-9]+)/);
+  return match?.[1] || match?.[2] || "";
 }
 
 function extractTransit(text) {
-  const match = text.match(/((?:JR|西鉄|福岡市営|地下鉄|福岡市地下鉄|市営地下鉄)[^。]{0,120}?(?:徒歩|バス)[^。]{0,80}?(?:分|団地))/);
+  const normalized = normalizeFullWidth(text);
+  const match = normalized.match(/((?:JR|西鉄|福岡市営|地下鉄|福岡市地下鉄|市営地下鉄)[^。]{0,180}?(?:徒歩|バス)[^。]{0,120}?(?:分|団地))/);
   return match ? clean(match[1]) : "";
 }
 
@@ -585,14 +687,17 @@ function extractImage(item) {
 
 function extractUrImage(block) {
   const images = [];
-  const imgRe = /<img\b[^>]*src=["']([^"']+\.(?:jpg|jpeg|png|webp)(?:\?[^"']*)?)["'][^>]*>/gi;
+  const imgRe = /<img\b[^>]*(?:src|data-src|data-original|data-lazy|data-img)=["']([^"']+)["'][^>]*>/gi;
   let match;
   while ((match = imgRe.exec(block)) !== null) {
-    const src = match[1];
-    if (/logo|icon|bnr|button|favorite|sprite/i.test(src)) continue;
-    images.push(absoluteUrl(src));
+    const src = decodeHtml(match[1]);
+    if (!src || /logo|icon|ico|bnr|button|favorite|sprite|arrow|search|map|pdf/i.test(src)) continue;
+    const abs = absoluteUrl(src);
+    const score = /madori|floor|plan|layout|間取|間取り/i.test(abs) ? 1 : 2;
+    images.push({ url: abs, score });
   }
-  return images[0] || "";
+  images.sort((a, b) => b.score - a.score);
+  return images[0]?.url || "";
 }
 
 function absoluteUrl(value) {
@@ -651,10 +756,10 @@ function dedupeByUrl(items) {
   });
 }
 
-function dedupeByTitle(items) {
+function dedupeProperties(items) {
   const seen = new Set();
   return items.filter((item) => {
-    const key = `${item.title}-${item.area}`;
+    const key = `${item.title}|${item.rentLabel}|${item.layoutLabel}|${item.url}`;
     if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;
