@@ -9,6 +9,8 @@ on:
       - main
     paths:
       - "scripts/scrape-properties.mjs"
+      - "app.js"
+      - "config.js"
       - "package.json"
       - ".github/workflows/scrape-properties.yml"
 
