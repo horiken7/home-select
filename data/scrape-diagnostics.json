@@ -1,46 +1,68 @@
 {
-  "generatedAt": "2026-06-25T04:48:50.420Z",
+  "generatedAt": "2026-06-25T05:36:24.395Z",
   "diagnostics": [
     {
       "source": "UR都市機構",
-      "ok": true,
-      "count": 3,
-      "url": "https://www.ur-net.go.jp/chintai/kyushu/fukuoka/result/?area=01&skcs=133&skcs=131&skcs=134&skcs=137&skcs=136&area=01&skcs=133&skcs=131&skcs=134&skcs=137&skcs=136&rent_low=&rent_high=&rent_low=&rent_high=&walk=&walk=&floorspace_low=&floorspace_high=&floorspace_low=&floorspace_high=&years=&years=&tdfk=40&todofuken=fukuoka"
+      "ok": false,
+      "count": 1,
+      "realCount": 0,
+      "needsCheckCount": 0,
+      "sourceLinkCount": 1,
+      "error": "page.evaluate: TypeError: link.href.startsWith is not a function\n    at eval (eval at evaluate (:303:30), <anonymous>:11:49)\n    at Array.filter (<anonymous>)\n    at getLinks (eval at evaluate (:303:30), <anonymous>:11:8)\n    at eval (eval at evaluate (:303:30), <anonymous>:19:23)\n    at Array.map (<anonymous>)\n    at eval (eval at evaluate (:303:30), <anonymous>:17:8)\n    at UtilityScript.evaluate (<anonymous>:305:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+      "url": "https://www.ur-net.go.jp/chintai/kyushu/fukuoka/result/?area=01&skcs=133&skcs=131&skcs=134&skcs=137&skcs=136&rent_high=100000&walk=15&tdfk=40&todofuken=fukuoka"
     },
     {
       "source": "LIFULL HOME'S",
       "ok": true,
       "count": 1,
+      "realCount": 0,
+      "needsCheckCount": 0,
+      "sourceLinkCount": 1,
       "url": "https://www.homes.co.jp/chintai/fukuoka/fukuoka-city/list/"
     },
     {
       "source": "SUUMO",
       "ok": true,
-      "count": 10,
+      "count": 15,
+      "realCount": 14,
+      "needsCheckCount": 1,
+      "sourceLinkCount": 0,
       "url": "https://suumo.jp/chintai/fukuoka/sa_fukuoka/"
     },
     {
       "source": "アットホーム",
       "ok": true,
       "count": 1,
+      "realCount": 0,
+      "needsCheckCount": 0,
+      "sourceLinkCount": 1,
       "url": "https://www.athome.co.jp/chintai/fukuoka/fukuoka-city/list/"
     },
     {
       "source": "CHINTAI",
       "ok": true,
-      "count": 1,
+      "count": 9,
+      "realCount": 2,
+      "needsCheckCount": 7,
+      "sourceLinkCount": 0,
       "url": "https://www.chintai.net/fukuoka/area/40130/list/"
     },
     {
       "source": "セーフティネット住宅",
       "ok": true,
       "count": 1,
-      "url": "https://www.safetynet-jutaku.jp/guest/index.php"
+      "realCount": 0,
+      "needsCheckCount": 0,
+      "sourceLinkCount": 1,
+      "url": "https://safetynet-jutaku.mlit.go.jp/guest/index.php?bot_check_js=ok"
     },
     {
       "source": "福岡市 居住支援",
       "ok": true,
       "count": 1,
+      "realCount": 0,
+      "needsCheckCount": 0,
+      "sourceLinkCount": 1,
       "url": "https://www.city.fukuoka.lg.jp/jutaku-toshi/jigyochosei/life/kyojuushienkyougikai.html"
     }
   ]
