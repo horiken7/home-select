@@ -1,0 +1,38 @@
+[
+  {
+    "source": "福岡市",
+    "title": "福岡市居住支援協議会・住まいサポートふくおか",
+    "summary": "高齢者など、民間賃貸住宅への入居に不安がある人向けの住み替え相談先として最優先で確認します。",
+    "url": "https://www.city.fukuoka.lg.jp/jutaku-toshi/jigyochosei/life/kyojuushienkyougikai.html"
+  },
+  {
+    "source": "福岡市",
+    "title": "居住サポート住宅の認定制度",
+    "summary": "住宅確保要配慮者向けの居住支援、家賃債務保証料等の低廉化、引っ越し費用・初期費用などの情報を確認します。",
+    "url": "https://www.city.fukuoka.lg.jp/jutaku-toshi/jigyochosei/life/kyojusupportnintei.html"
+  },
+  {
+    "source": "UR都市機構",
+    "title": "UR賃貸住宅 福岡県エリア検索",
+    "summary": "福岡市と周辺市町村のUR賃貸を探す入口。保証人不要など、定年後の住み替えで比較しやすい候補です。",
+    "url": "https://www.ur-net.go.jp/chintai/kyushu/fukuoka/area/"
+  },
+  {
+    "source": "国土交通省系",
+    "title": "サービス付き高齢者向け住宅 情報提供システム",
+    "summary": "見守りや生活相談サービス付き住宅を比較するための公式系検索。費用条件は物件ごとに要確認です。",
+    "url": "https://www.satsuki-jutaku.mlit.go.jp/search/list.php?pref_code=40"
+  },
+  {
+    "source": "国土交通省系",
+    "title": "セーフティネット住宅情報提供システム",
+    "summary": "高齢者など住宅確保要配慮者向けの登録住宅を探す入口。福岡市の支援制度と合わせて確認します。",
+    "url": "https://www.safetynet-jutaku.jp/guest/index.php"
+  },
+  {
+    "source": "福岡県建築住宅センター",
+    "title": "住宅相談・住まいの情報",
+    "summary": "福岡県内の住宅相談や住まいに関する情報提供の窓口。制度確認時の補助線として使います。",
+    "url": "https://www.fkjc.or.jp/"
+  }
+]
