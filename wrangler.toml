@@ -1,0 +1,7 @@
+name = "home-select-search"
+main = "worker-entry.js"
+compatibility_date = "2026-06-25"
+
+# Secrets required in Cloudflare Workers:
+# GOOGLE_API_KEY
+# GOOGLE_CSE_ID
