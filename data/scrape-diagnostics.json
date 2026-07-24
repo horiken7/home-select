@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-23T22:15:39.803Z",
+  "generatedAt": "2026-07-24T22:19:28.833Z",
   "diagnostics": [
     {
       "source": "UR都市機構",
@@ -8,7 +8,7 @@
       "realCount": 0,
       "needsCheckCount": 0,
       "sourceLinkCount": 1,
-      "error": "page.evaluate: TypeError: link.href.startsWith is not a function\n    at eval (eval at evaluate (:303:30), <anonymous>:11:49)\n    at Array.filter (<anonymous>)\n    at getLinks (eval at evaluate (:303:30), <anonymous>:11:8)\n    at eval (eval at evaluate (:303:30), <anonymous>:19:23)\n    at Array.map (<anonymous>)\n    at eval (eval at evaluate (:303:30), <anonymous>:17:8)\n    at UtilityScript.evaluate (<anonymous>:305:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+      "error": "page.evaluate: TypeError: link.href.startsWith is not a function\n    at eval (eval at evaluate (:311:30), <anonymous>:11:49)\n    at Array.filter (<anonymous>)\n    at getLinks (eval at evaluate (:311:30), <anonymous>:11:8)\n    at eval (eval at evaluate (:311:30), <anonymous>:19:23)\n    at Array.map (<anonymous>)\n    at eval (eval at evaluate (:311:30), <anonymous>:17:8)\n    at UtilityScript.evaluate (<anonymous>:313:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
       "url": "https://www.ur-net.go.jp/chintai/kyushu/fukuoka/result/?area=01&skcs=133&skcs=131&skcs=134&skcs=137&skcs=136&rent_high=100000&walk=15&tdfk=40&todofuken=fukuoka"
     },
     {
@@ -41,8 +41,8 @@
     {
       "source": "CHINTAI",
       "ok": true,
-      "count": 9,
-      "realCount": 2,
+      "count": 11,
+      "realCount": 4,
       "needsCheckCount": 7,
       "sourceLinkCount": 0,
       "url": "https://www.chintai.net/fukuoka/area/40130/list/"
