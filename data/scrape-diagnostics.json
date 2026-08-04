@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-03T22:19:09.795Z",
+  "generatedAt": "2026-08-04T22:23:59.171Z",
   "diagnostics": [
     {
       "source": "UR都市機構",
@@ -41,8 +41,8 @@
     {
       "source": "CHINTAI",
       "ok": true,
-      "count": 7,
-      "realCount": 0,
+      "count": 8,
+      "realCount": 1,
       "needsCheckCount": 7,
       "sourceLinkCount": 0,
       "url": "https://www.chintai.net/fukuoka/area/40130/list/"
