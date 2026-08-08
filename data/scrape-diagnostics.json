@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-07T21:55:52.998Z",
+  "generatedAt": "2026-08-08T21:45:49.388Z",
   "diagnostics": [
     {
       "source": "UR都市機構",
@@ -23,8 +23,8 @@
     {
       "source": "SUUMO",
       "ok": true,
-      "count": 15,
-      "realCount": 14,
+      "count": 13,
+      "realCount": 12,
       "needsCheckCount": 1,
       "sourceLinkCount": 0,
       "url": "https://suumo.jp/chintai/fukuoka/sa_fukuoka/"
@@ -42,8 +42,8 @@
       "source": "CHINTAI",
       "ok": true,
       "count": 9,
-      "realCount": 0,
-      "needsCheckCount": 9,
+      "realCount": 1,
+      "needsCheckCount": 8,
       "sourceLinkCount": 0,
       "url": "https://www.chintai.net/fukuoka/area/40130/list/"
     },
