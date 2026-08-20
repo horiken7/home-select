@@ -46,9 +46,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-playwright-
 
+      # GitHub-hosted Ubuntu already contains the shared libraries Playwright needs.
+      # Avoid --with-deps here because it runs apt against Ubuntu mirrors and has
+      # repeatedly timed out before Chromium itself could be installed/verified.
       - name: Install Chromium
-        timeout-minutes: 8
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 5
+        run: npx playwright install chromium
 
       - name: Scrape property data
         timeout-minutes: 10
