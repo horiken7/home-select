@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-20T01:54:17.210Z",
+  "generatedAt": "2026-08-20T21:41:58.783Z",
   "diagnostics": [
     {
       "source": "UR都市機構",
@@ -23,8 +23,8 @@
     {
       "source": "SUUMO",
       "ok": true,
-      "count": 14,
-      "realCount": 13,
+      "count": 15,
+      "realCount": 14,
       "needsCheckCount": 1,
       "sourceLinkCount": 0,
       "url": "https://suumo.jp/chintai/fukuoka/sa_fukuoka/"
@@ -41,9 +41,9 @@
     {
       "source": "CHINTAI",
       "ok": true,
-      "count": 8,
+      "count": 9,
       "realCount": 0,
-      "needsCheckCount": 8,
+      "needsCheckCount": 9,
       "sourceLinkCount": 0,
       "url": "https://www.chintai.net/fukuoka/area/40130/list/"
     },
@@ -54,7 +54,7 @@
       "realCount": 0,
       "needsCheckCount": 0,
       "sourceLinkCount": 1,
-      "url": "https://safetynet-jutaku.mlit.go.jp/guest/index.php?bot_check_js=ok"
+      "url": "https://safetynet-jutaku.mlit.go.jp/guest/index.php"
     },
     {
       "source": "福岡市 居住支援",
