@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-04T23:59:42.650Z",
+  "generatedAt": "2026-10-06T01:47:50.859Z",
   "diagnostics": [
     {
       "source": "UR都市機構",
@@ -40,11 +40,12 @@
     },
     {
       "source": "CHINTAI",
-      "ok": true,
-      "count": 9,
-      "realCount": 2,
-      "needsCheckCount": 7,
-      "sourceLinkCount": 0,
+      "ok": false,
+      "count": 1,
+      "realCount": 0,
+      "needsCheckCount": 0,
+      "sourceLinkCount": 1,
+      "error": "page.goto: Timeout 60000ms exceeded.\nCall log:\n  - navigating to \"https://www.chintai.net/fukuoka/area/40130/list/\", waiting until \"domcontentloaded\"\n",
       "url": "https://www.chintai.net/fukuoka/area/40130/list/"
     },
     {
