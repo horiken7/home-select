@@ -173,8 +173,8 @@
     "score": 83
   },
   {
-    "title": "ビレッジハウス檜原３号棟",
-    "subtitle": "ビレッジハウス檜原3号棟 福岡県福岡市南区桧原5 地下鉄七隈線/福大前駅 歩50分 築57年 5階建 5階 5.02万円 - - - 3DK 57.96m2 追加 詳細を見るお問い合わせ (無料)",
+    "title": "ビレッジハウス檜原3号棟",
+    "subtitle": "ビレッジハウス檜原3号棟 福岡県福岡市南区桧原5 地下鉄七隈線/福大前駅 歩50分 地下鉄七隈線/七隈駅 歩58分 地下鉄七隈線/梅林駅 歩62分 築57年 5階建 5階 5.02万円 - - - 3DK 57.96m2 動画 パノラマ 追加 詳細を見るお問い合わせ (無料)",
     "area": "福岡市南区",
     "areaGroup": "fukuoka_city",
     "type": "private",
@@ -197,7 +197,7 @@
     "note": "SUUMOから自動抽出した候補です。管理費込み家賃・入居審査・空室はリンク先で確認してください。",
     "url": "https://suumo.jp/chintai/jnc_000110772764/",
     "subUrl": "https://suumo.jp/chintai/fukuoka/sa_fukuoka/",
-    "imageUrl": "https://img01.suumo.com/front/gazo/fr/bukken/155/100534172155/100534172155_co.jpg",
+    "imageUrl": "https://img01.suumo.com/front/gazo/fr/bukken/421/100534150421/100534150421_co.jpg",
     "imageLabel": "取得画像",
     "sourceId": "suumo",
     "source": "SUUMO",
@@ -310,8 +310,8 @@
   },
   {
     "title": "住所",
-    "subtitle": "住所 福岡県福岡市東区香椎1丁目 周辺地図 交通 西鉄貝塚線/香椎宮前駅 徒歩6分 鹿児島本線/香椎駅 徒歩11分 香椎線<海の中道線>/香椎駅 徒歩11分 築年 2025年09月（築1年） 階建 3階建 構造 木造",
-    "area": "福岡市東区",
+    "subtitle": "住所 福岡県福岡市南区弥永4丁目 周辺地図 交通 博多南線/博多南駅 徒歩15分 西鉄天神大牟田線/井尻駅 徒歩47分 西鉄天神大牟田線/雑餉隈駅 徒歩47分 築年 1995年02月（築31年） 階建 4階建 構造 鉄筋コンクリート造",
+    "area": "福岡市南区",
     "areaGroup": "fukuoka_city",
     "type": "private",
     "layoutMin": 2,
@@ -320,8 +320,8 @@
     "layoutLabel": "2LDK以上 / 要確認",
     "rentHint": 999,
     "rentLabel": "10万円以内 / 要確認",
-    "walkHint": 6,
-    "walkLabel": "徒歩6分〜",
+    "walkHint": 15,
+    "walkLabel": "徒歩15分〜",
     "flexibleRent": true,
     "flexibleWalk": false,
     "flexibleLayout": true,
@@ -345,7 +345,7 @@
     ],
     "matchStatus": "needs_check",
     "matchStatusLabel": "条件要確認の候補",
-    "score": 70
+    "score": 68
   },
   {
     "title": "UR都市機構を公式サイトで確認",
